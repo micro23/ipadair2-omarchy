@@ -7,9 +7,11 @@ preparation recipe and Wi-Fi controller source used for a successful RAM test.
 
 The qualified Wi-Fi session loaded BCM4350 firmware, associated using WPA2
 Personal, obtained DHCP configuration and passed routing, ICMP, DNS and HTTP
-checks. A reduced Omarchy-A/Labwc desktop with Mac keyboard/mouse forwarding
-was qualified separately on the earlier RAM kernel. Their combined runtime
-still needs a physical-device trial.
+checks. A fresh live check also confirmed a reduced Omarchy-A/Labwc desktop
+on that same Wi-Fi kernel, with an active compositor and successful DNS/HTTP
+requests as the desktop user. The owner confirmed working Mac keyboard/mouse
+forwarding in this combined session. See [qualification](QUALIFICATION.md)
+for the observed scope and remaining hardware work.
 
 This is a source contribution for hardware integration. It is **not yet an
 Orchard CLI device adapter, published launcher release or internal-storage

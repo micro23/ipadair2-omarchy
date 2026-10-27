@@ -48,7 +48,7 @@
     "revision": "56e123a2c708c589f463d5262c36f28ddf2d9b2b",
     "bytes": 1096228981,
     "sha256": "8ff6897909d2fa3d894f7c87264e223000649f6be513414b9a0fef307adf3e46",
-    "scope": "Source of selected AArch64 tools and separately qualified desktop; not part of the hardware contribution."
+    "scope": "Source of selected AArch64 tools and the qualified reduced desktop userspace; not part of the hardware contribution."
   },
   "regulatory": {
     "source_url": "https://www.kernel.org/pub/software/network/wireless-regdb/wireless-regdb-2025.10.07.tar.xz",

@@ -85,10 +85,13 @@ Tool source/build receipts and licenses belong with any separately
 distributed runtime archive. This source contribution includes no tool
 binaries or rootfs archives.
 
-The separately qualified desktop used a reduced Omarchy-A v0.1.0 AArch64
+The qualified desktop used a reduced Omarchy-A v0.1.0 AArch64
 userspace: Labwc, Quickshell, Foot and software rendering. Input came from a
 Mac web controller and an explicit uinput bridge, not the native touch panel.
-The combined desktop-on-Wi-Fi wrapper is a separate integration artifact and
-has not yet established hardware qualification. A full systemd/persistent
-Omarchy installation needs a new installed-root/storage design beyond this
-RAM-only kernel contract.
+The combined desktop-on-Wi-Fi wrapper is a separate integration artifact.
+An owner-supplied live report now confirms the active desktop and successful
+desktop-user DNS/HTTP probes on the same qualified Wi-Fi kernel; see
+[qualification](../../QUALIFICATION.md). The wrapper and desktop rootfs are
+not included in this source contribution. A full systemd/persistent Omarchy
+installation needs a new installed-root/storage design beyond this RAM-only
+kernel contract.
