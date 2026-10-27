@@ -1,0 +1,33 @@
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -74,6 +74,30 @@
+ 	status = "okay";
+ };
+ 
++/*
++ * BT-1 (transport only): describes and enables UART3, the BCM43540
++ * combo chip's HCI UART interface. See
++ * docs/plans/2026-09-08-j81-bluetooth-battery-adt.md's "BT-1".
++ *
++ * Deliberately no bluetooth serdev child node here yet: this patch
++ * validates the UART transport independently through the plain tty and
++ * userspace `btattach`. The common serial core does expose Samsung UART
++ * ports as serdev controllers when a DT child is present, so the later
++ * power-managed Bluetooth node can use the standard hci_bcm serdev path.
++ *
++ * Host-wake (AP GPIO 164) and PMU power-enable (PMU GPIO 2) are also
++ * deliberately left out of this first patch either way -- both are
++ * optional to hci_bcm, and this step is testing whether iBoot/m1n1
++ * already left the radio powered, without guessing this SoC's PMU GPIO
++ * register layout or an IRQ polarity.
++ */
++&serial3 {
++	status = "okay";
++	pinctrl-0 = <&uart3_pins>;
++	pinctrl-names = "default";
++	uart-has-rtscts;
++};
++
+ &i2c0 {
+ 	status = "okay";
+ 

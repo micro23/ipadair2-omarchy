@@ -1,0 +1,136 @@
+--- a/drivers/pci/controller/pcie-apple-t7000.c	2026-10-05 08:33:08
++++ b/drivers/pci/controller/pcie-apple-t7000.c	2026-10-05 08:33:09
+@@ -430,33 +430,82 @@
+ }
+ 
+ /*
+- * Stage 5E: bounded poll for Apple's own link-up signal
+- * (waitForLinkUpGated() polls the same +0x88 bit 6). 500ms is a
+- * generous bound, not an Apple-recovered value -- there is no evidence
+- * yet for how long real hardware takes, so this only distinguishes
+- * "came up" from "still not up after a reasonable wait", matching
+- * Stage 5D's own read-only result of zero transitions over 1s.
++ * Link-up detection: the root port's own PCIe Data Link Layer Link Active
++ * bit (Link Status bit 13), read through the bus 0 / device 1 / function 0
++ * ECAM view that the Gen1 write below already uses, before any pci_dev
++ * exists. Apple's controller-window register +0x88 is NOT used as a success
++ * criterion: its bit 6 read 0 on the hardware run where the BCM4350
++ * enumerated and the root port reported DLLLA=1 (2026-10-05, see
++ * research/j81-d2207-gpio-register-correction.md), and the meaning of its
++ * bits is undecoded. The raw words are still logged for later decoding.
++ *
++ * The bound is a generous design value (PCIe allows up to 1 s after reset
++ * for a link-active-reporting port), not an Apple-recovered number. A
++ * timeout is reported but not fatal: the generic ECAM core then enumerates
++ * and finds no device, exactly as before.
+  */
+-#define T7000_PCIE_LINK_UP_BIT		BIT(6)
+-#define T7000_PCIE_LINK_UP_TIMEOUT_MS	500
+-#define T7000_PCIE_LINK_UP_POLL_MS	5
+-
+-static void t7000_pcie_wait_link_up(struct device *dev, void __iomem *ctrl)
+-{
+-	unsigned long deadline = jiffies + msecs_to_jiffies(T7000_PCIE_LINK_UP_TIMEOUT_MS);
+-	u32 status;
++#define T7000_PCIE_LNKCAP_OFFSET	0x0c	/* PCIe Link Capabilities, relative to cap base */
++#define T7000_PCIE_LNKSTA_OFFSET	0x12	/* PCIe Link Status, relative to cap base */
++#define T7000_PCIE_LNKCAP_DLLLARC	BIT(20)	/* Data Link Layer Link Active Reporting Capable */
++#define T7000_PCIE_LNKSTA_DLLLA	BIT(13)	/* Data Link Layer Link Active */
++#define T7000_PCIE_LINK_ACTIVE_TIMEOUT_MS	1000
++#define T7000_PCIE_LINK_ACTIVE_POLL_MS	5
+ 
+-	do {
+-		status = readl(ctrl + T7000_PCIE_LINK_STATUS_A);
+-		if (status & T7000_PCIE_LINK_UP_BIT)
++/* Offset of the PCI Express capability in a root-port config view, or 0. */
++static u8 t7000_pcie_find_express_cap(void __iomem *dev1)
++{
++	u8 cap_ptr = readb(dev1 + T7000_PCIE_CAP_PTR_OFFSET);
++	int i;
++
++	for (i = 0; i < T7000_PCIE_CAP_WALK_MAX && cap_ptr; i++) {
++		if (readb(dev1 + cap_ptr) == T7000_PCIE_CAP_ID_EXPRESS)
++			return cap_ptr;
++		cap_ptr = readb(dev1 + cap_ptr + 1);
++	}
++
++	return 0;
++}
++
++static void t7000_pcie_wait_link_active(struct device *dev,
++					struct pci_config_window *cfg,
++					void __iomem *ctrl)
++{
++	void __iomem *dev1 = cfg->win + T7000_PCIE_ROOT_PORT_ECAM_OFFSET;
++	unsigned long deadline;
++	u8 cap_ptr;
++	u16 lnksta = 0;
++	bool active = false;
++
++	cap_ptr = t7000_pcie_find_express_cap(dev1);
++	if (!cap_ptr) {
++		dev_info(dev,
++			 "t7000-pcie link-wait: PCI Express capability not found, relying on enumeration\n");
++		return;
++	}
++
++	if (!(readl(dev1 + cap_ptr + T7000_PCIE_LNKCAP_OFFSET) & T7000_PCIE_LNKCAP_DLLLARC)) {
++		dev_info(dev,
++			 "t7000-pcie link-wait: root port does not report link-active, relying on enumeration\n");
++		return;
++	}
++
++	deadline = jiffies + msecs_to_jiffies(T7000_PCIE_LINK_ACTIVE_TIMEOUT_MS);
++	do {
++		lnksta = readw(dev1 + cap_ptr + T7000_PCIE_LNKSTA_OFFSET);
++		active = lnksta & T7000_PCIE_LNKSTA_DLLLA;
++		if (active)
+ 			break;
+-		msleep(T7000_PCIE_LINK_UP_POLL_MS);
++		msleep(T7000_PCIE_LINK_ACTIVE_POLL_MS);
+ 	} while (time_before(jiffies, deadline));
+ 
+ 	dev_info(dev,
+-		 "t7000-pcie link-wait-test: link_up=%d 0x088=0x%08x 0x08c=0x%08x\n",
+-		 !!(status & T7000_PCIE_LINK_UP_BIT), status,
++		 "t7000-pcie link-wait: link active=%d lnksta=0x%04x (controller +0x088=0x%08x +0x08c=0x%08x, undecoded)\n",
++		 active, lnksta, readl(ctrl + T7000_PCIE_LINK_STATUS_A),
+ 		 readl(ctrl + T7000_PCIE_LINK_STATUS_B));
++	if (!active)
++		dev_warn(dev,
++			 "t7000-pcie link-wait: link did not become active within %d ms; enumeration will likely find no device\n",
++			 T7000_PCIE_LINK_ACTIVE_TIMEOUT_MS);
+ }
+ 
+ static void t7000_pcie_rmw(struct device *dev, void __iomem *base,
+@@ -547,16 +596,9 @@
+ 	u8 cap_ptr;
+ 	u32 lnkcap2;
+ 	u16 old, new;
+-	int i;
+ 
+-	cap_ptr = readb(dev1 + T7000_PCIE_CAP_PTR_OFFSET);
+-	for (i = 0; i < T7000_PCIE_CAP_WALK_MAX && cap_ptr; i++) {
+-		if (readb(dev1 + cap_ptr) == T7000_PCIE_CAP_ID_EXPRESS)
+-			break;
+-		cap_ptr = readb(dev1 + cap_ptr + 1);
+-	}
+-
+-	if (!cap_ptr || readb(dev1 + cap_ptr) != T7000_PCIE_CAP_ID_EXPRESS) {
++	cap_ptr = t7000_pcie_find_express_cap(dev1);
++	if (!cap_ptr) {
+ 		dev_info(dev,
+ 			 "t7000-pcie link-speed-test: PCI Express capability not found, skipping max-link-speed write\n");
+ 		return;
+@@ -633,9 +675,9 @@
+ 
+ 	t7000_pcie_set_link_start(dev, ctrl, T7000_PCIE_TEST_PORT);
+ 
+-	t7000_pcie_wait_link_up(dev, ctrl);
++	t7000_pcie_wait_link_active(dev, cfg, ctrl);
+ 
+-	dev_info(dev, "t7000-pcie link-wait-test: init complete, handing back to generic ECAM core for bus enumeration\n");
++	dev_info(dev, "t7000-pcie link-wait: init complete, handing back to generic ECAM core for bus enumeration\n");
+ 
+ 	return 0;
+ }

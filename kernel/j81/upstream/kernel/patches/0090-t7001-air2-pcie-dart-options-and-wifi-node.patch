@@ -1,0 +1,76 @@
+diff --git a/arch/arm64/boot/dts/apple/t7001.dtsi b/arch/arm64/boot/dts/apple/t7001.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001.dtsi
+@@ -21,6 +21,11 @@
+ 		ausbphy0 = &ausbphy0; /* Used by loader */
+ 		serial0 = &serial0;
+ 		/*
++		 * The Wi-Fi endpoint below. m1n1 copies the ADT's /chosen/mac-address-wifi0 into this node's
++		 * local-mac-address, and brcmfmac writes it into the NVRAM (macaddr=) the firmware needs to attach.
++		 */
++		wifi0 = &wifi0;
++		/*
+ 		 * No bluetooth0 alias yet: that only matters once a real
+ 		 * bluetooth child node exists (see serial3's comment below
+ 		 * and the BT-1 plan) -- m1n1's mac-address-bluetooth0 copy
+@@ -434,15 +439,34 @@
+ 			 * (not required for basic link-up) are deliberately
+ 			 * not added here.
+ 			 */
+-			pci@0,0 {
++			pci@1,0 {
+ 				device_type = "pci";
+-				reg = <0x0 0x0 0x0 0x0 0x0>;
++				/*
++				 * The Apple root port enumerates at 00:01.0 (106b:1002), so this node is device 1 (reg 0x800); it was
++				 * <0> before, which matched no device. pci_host_common_parse_ports() and the device-wake lookup
++				 * ignore reg, so reset-gpios and device-wake-gpios behave as before.
++				 */
++				reg = <0x800 0x0 0x0 0x0 0x0>;
++				#address-cells = <3>;
++				#size-cells = <2>;
++				ranges;
+ 				reset-gpios = <&pinctrl 179 GPIO_ACTIVE_LOW>;
+ 				/*
+ 				 * ADT pci-bridge1 function-device_wake (OIPG pin 0xa5, flags 0x101). Only driven
+ 				 * when the test boot argument pcie_apple_t7000.device_wake=1 is given.
+ 				 */
+ 				device-wake-gpios = <&pinctrl 165 GPIO_ACTIVE_HIGH>;
++
++				/*
++				 * BCM4350 Wi-Fi (14e4:43a3) at 01:00.0. The all-zero local-mac-address is a placeholder that m1n1
++				 * overwrites with the device's real address through the wifi0 alias; brcmfmac treats all-zero as
++				 * absent and then uses a macaddr line in the NVRAM, if there is one.
++				 */
++				wifi0: network@0,0 {
++					compatible = "pci14e4,43a3";
++					reg = <0x10000 0x0 0x0 0x0 0x0>;
++					local-mac-address = [00 00 00 00 00 00];
++				};
+ 			};
+ 		};
+ 
+diff --git a/arch/arm64/boot/dts/apple/t7001-air2.dtsi b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -226,3 +226,20 @@
+ 	msi-parent = <&pcie>;
+ 	msi-ranges = <&aic AIC_IRQ 224 IRQ_TYPE_EDGE_RISING 32>;
+ };
++
++/*
++ * J81 PCIe DART (dart-apcie1) options, all proven on hardware (research/2026-10-07-wifi-h1b-modelA-run.md runs 33-38). Without them the first
++ * device DMA read faults and, with no error reflector, silently resets the SoC.
++ *   apple,ios-pte                Apple's S5L8960X entry format: directory |3, leaf |3 (bits 1+0).
++ *   apple,pci-alias              also map every page at the raw (un-rebased) index.
++ *   apple,error-reflector        ADT error-reflector 0x20ffff000 >> 12, written first (Apple's start-up order).
++ *   apple,fetch-config           ADT fetch-config.
++ *   apple,diag-config            ADT diag-config.
++ */
++&dart_apcie1 {
++	apple,ios-pte;
++	apple,pci-alias;
++	apple,error-reflector = <0x0020ffff>;
++	apple,fetch-config = <0x000e0303>;
++	apple,diag-config = <0x00000100>;
++};

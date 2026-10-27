@@ -1,0 +1,117 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -1340,6 +1340,46 @@
+ }
+ 
+ 
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++/*
++ * Test only (patch 0070): make the shared-memory content the host provides match Apple's bus driver
++ * (iOS 8.1 FUN_c05974). Bit mask, 0 = stock Linux:
++ *   1 = do not provide the ring-update DMA buffer (Apple never writes shared +0x40/+0x44),
++ *   2 = scratch buffer of 4096 bytes instead of 8 (Apple writes shared +0x34 = 0x1000),
++ *   4 = Apple's common-ring depths 128/256/128/256/256 instead of 64/1024/64/1024/1024.
++ */
++#define H1B_SHARED_NO_RINGUPD	1
++#define H1B_SHARED_SCRATCH_4K	2
++#define H1B_SHARED_APPLE_DEPTH	4
++
++static unsigned int h1b_apple_shared_mask;
++module_param_named(h1b_apple_shared, h1b_apple_shared_mask, uint, 0444);
++MODULE_PARM_DESC(h1b_apple_shared, "J81 test: bit 0 no ringupd buffer, bit 1 4 KiB scratch, bit 2 Apple ring depths");
++
++static const u32 h1b_apple_max_item[BRCMF_NROF_COMMON_MSGRINGS] = { 128, 256, 128, 256, 256 };
++
++static u32 h1b_ring_max_item(u32 ring_id)
++{
++	if (h1b_apple_shared_mask & H1B_SHARED_APPLE_DEPTH)
++		return h1b_apple_max_item[ring_id];
++	return brcmf_ring_max_item[ring_id];
++}
++
++static u32 h1b_scratch_len(void)
++{
++	return (h1b_apple_shared_mask & H1B_SHARED_SCRATCH_4K) ? 4096 : BRCMF_DMA_D2H_SCRATCH_BUF_LEN;
++}
++
++static bool h1b_skip_ringupd(void)
++{
++	return h1b_apple_shared_mask & H1B_SHARED_NO_RINGUPD;
++}
++#else
++static inline u32 h1b_ring_max_item(u32 ring_id) { return brcmf_ring_max_item[ring_id]; }
++static inline u32 h1b_scratch_len(void) { return BRCMF_DMA_D2H_SCRATCH_BUF_LEN; }
++static inline bool h1b_skip_ringupd(void) { return false; }
++#endif
++
+ static void *
+ brcmf_pcie_init_dmabuffer_for_device(struct brcmf_pciedev_info *devinfo,
+ 				     u32 size, u32 tcm_dma_phys_addr,
+@@ -1379,7 +1419,7 @@
+ 	else
+ 		ring_itemsize_array = brcmf_ring_itemsize;
+ 
+-	size = brcmf_ring_max_item[ring_id] * ring_itemsize_array[ring_id];
++	size = h1b_ring_max_item(ring_id) * ring_itemsize_array[ring_id];
+ 	dma_buf = brcmf_pcie_init_dmabuffer_for_device(devinfo, size,
+ 			tcm_ring_phys_addr + BRCMF_RING_MEM_BASE_ADDR_OFFSET,
+ 			&dma_handle);
+@@ -1387,7 +1427,7 @@
+ 		return NULL;
+ 
+ 	addr = tcm_ring_phys_addr + BRCMF_RING_MAX_ITEM_OFFSET;
+-	brcmf_pcie_write_tcm16(devinfo, addr, brcmf_ring_max_item[ring_id]);
++	brcmf_pcie_write_tcm16(devinfo, addr, h1b_ring_max_item(ring_id));
+ 	addr = tcm_ring_phys_addr + BRCMF_RING_LEN_ITEMS_OFFSET;
+ 	brcmf_pcie_write_tcm16(devinfo, addr, ring_itemsize_array[ring_id]);
+ 
+@@ -1397,7 +1437,7 @@
+ 				  dma_handle);
+ 		return NULL;
+ 	}
+-	brcmf_commonring_config(&ring->commonring, brcmf_ring_max_item[ring_id],
++	brcmf_commonring_config(&ring->commonring, h1b_ring_max_item(ring_id),
+ 				ring_itemsize_array[ring_id], dma_buf);
+ 	ring->dma_handle = dma_handle;
+ 	ring->devinfo = devinfo;
+@@ -1621,7 +1661,7 @@
+ {
+ 	if (devinfo->shared.scratch) {
+ 		dma_free_coherent(&devinfo->pdev->dev,
+-				  BRCMF_DMA_D2H_SCRATCH_BUF_LEN,
++				  h1b_scratch_len(),
+ 				  devinfo->shared.scratch,
+ 				  devinfo->shared.scratch_dmahandle);
+ 		devinfo->shared.scratch = NULL;
+@@ -1643,14 +1683,14 @@
+ 
+ 	devinfo->shared.scratch =
+ 		dma_alloc_coherent(&devinfo->pdev->dev,
+-				   BRCMF_DMA_D2H_SCRATCH_BUF_LEN,
++				   h1b_scratch_len(),
+ 				   &devinfo->shared.scratch_dmahandle,
+ 				   GFP_KERNEL);
+ 	if (!devinfo->shared.scratch)
+ 		goto fail;
+ 
+ 	h1b_log_domain(devinfo);
+-	h1b_log_dma(devinfo, "scratch", devinfo->shared.scratch_dmahandle, BRCMF_DMA_D2H_SCRATCH_BUF_LEN);
++	h1b_log_dma(devinfo, "scratch", devinfo->shared.scratch_dmahandle, h1b_scratch_len());
+ 	addr = devinfo->shared.tcm_base_address +
+ 	       BRCMF_SHARED_DMA_SCRATCH_ADDR_OFFSET;
+ 	address = (u64)devinfo->shared.scratch_dmahandle;
+@@ -1658,7 +1698,12 @@
+ 	brcmf_pcie_write_tcm32(devinfo, addr + 4, address >> 32);
+ 	addr = devinfo->shared.tcm_base_address +
+ 	       BRCMF_SHARED_DMA_SCRATCH_LEN_OFFSET;
+-	brcmf_pcie_write_tcm32(devinfo, addr, BRCMF_DMA_D2H_SCRATCH_BUF_LEN);
++	brcmf_pcie_write_tcm32(devinfo, addr, h1b_scratch_len());
++
++	if (h1b_skip_ringupd()) {
++		dev_info(&devinfo->pdev->dev, "t7000-h1b: ring-update buffer not provided (h1b_apple_shared)\n");
++		return 0;
++	}
+ 
+ 	devinfo->shared.ringupd =
+ 		dma_alloc_coherent(&devinfo->pdev->dev,

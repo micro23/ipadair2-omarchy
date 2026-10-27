@@ -1,0 +1,58 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+@@ -31,6 +31,7 @@
+  * brcmfmac.h1b_feed: bit 0 rx data buffers, bit 1 event buffers, bit 2 ioctl-response buffers (default 7 = all).
+  * brcmfmac.h1b_rxpost=N (default 0): post at most N rx data buffers instead of the firmware's maximum.
+  */
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
+ static unsigned int h1b_feed = 7;
+ module_param_named(h1b_feed, h1b_feed, uint, 0444);
+ MODULE_PARM_DESC(h1b_feed, "J81 test: bit mask of buffers to feed at attach (1 data, 2 event, 4 ioctl response; default 7)");
+@@ -54,6 +55,12 @@
+ static unsigned int h1b_rxpost;
+ module_param_named(h1b_rxpost, h1b_rxpost, uint, 0444);
+ MODULE_PARM_DESC(h1b_rxpost, "J81 test: post at most this many rx data buffers (0 = the firmware's maximum)");
++#else
++/* Production kernels: no test toggles, no marker lines (patch 0094); the attach path always feeds all buffers at once. */
++#define h1b_feed	7u
++#define h1b_rxpost	0u
++static inline void h1b_sync(const char *what) { }
++#endif
+ 
+ 
+ #define MSGBUF_IOCTL_RESP_TIMEOUT		msecs_to_jiffies(2000)
+@@ -1689,7 +1696,8 @@
+ 	brcmf_dbg(MSGBUF, "Feeding buffers, rx data %d, rx event %d, rx ioctl resp %d\n",
+ 		  msgbuf->max_rxbufpost, msgbuf->max_eventbuf,
+ 		  msgbuf->max_ioctlrespbuf);
+-	pr_info("t7000-h1b: feed: mask 0x%x, rx data %d\n", h1b_feed, msgbuf->max_rxbufpost);
++	if (IS_ENABLED(CONFIG_BRCMFMAC_PCIE_H1B_DIAG))
++		pr_info("t7000-h1b: feed: mask 0x%x, rx data %d\n", h1b_feed, msgbuf->max_rxbufpost);
+ 	h1b_sync("before feeding");
+ 	count = 0;
+ 	if (h1b_feed & 1) {
+@@ -1701,17 +1709,20 @@
+ 				break;
+ 			count++;
+ 		} while (count < 10);
+-		pr_info("t7000-h1b: feed: rx data buffers posted (%d)\n", msgbuf->rxbufpost);
++		if (IS_ENABLED(CONFIG_BRCMFMAC_PCIE_H1B_DIAG))
++			pr_info("t7000-h1b: feed: rx data buffers posted (%d)\n", msgbuf->rxbufpost);
+ 		h1b_sync("rx data buffers posted");
+ 	}
+ 	if (h1b_feed & 2) {
+ 		brcmf_msgbuf_rxbuf_event_post(msgbuf);
+-		pr_info("t7000-h1b: feed: event buffers posted\n");
++		if (IS_ENABLED(CONFIG_BRCMFMAC_PCIE_H1B_DIAG))
++			pr_info("t7000-h1b: feed: event buffers posted\n");
+ 		h1b_sync("event buffers posted");
+ 	}
+ 	if (h1b_feed & 4) {
+ 		brcmf_msgbuf_rxbuf_ioctlresp_post(msgbuf);
+-		pr_info("t7000-h1b: feed: ioctl response buffers posted\n");
++		if (IS_ENABLED(CONFIG_BRCMFMAC_PCIE_H1B_DIAG))
++			pr_info("t7000-h1b: feed: ioctl response buffers posted\n");
+ 		h1b_sync("ioctl response buffers posted");
+ 	}
+ 

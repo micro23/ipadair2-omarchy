@@ -1,0 +1,78 @@
+diff --git a/drivers/tty/serial/samsung_tty.c b/drivers/tty/serial/samsung_tty.c
+--- a/drivers/tty/serial/samsung_tty.c
++++ b/drivers/tty/serial/samsung_tty.c
+@@ -133,6 +133,7 @@
+ 	unsigned char			tx_enabled;
+ 	unsigned int			pm_level;
+ 	unsigned long			baudclk_rate;
++	bool				apple_baud_factor;	/* apple,baud-factor-select: UBRDIV upper half selects the sampling factor */
+ 	unsigned int			min_dma_size;
+ 
+ 	unsigned int			rx_irq;
+@@ -1459,6 +1460,40 @@
+ 	[14] = 0xDFDF,
+ 	[15] = 0xFFDF,
+ };
++
++/*
++ * Apple S5L UART (J81 Bluetooth UART3): the upper half of UBRDIV (+0x28) is a sampling-factor field. Measured on the iPad (research/2026-10-11-uart3-register-capture.md, rounds 8-9):
++ * baud = clk / ((16 - i) x (div + 1)) for i = 0..12 (factor 16 down to 4), with UCON/UFCON untouched; i = 0 is the legacy divide-by-16 mode, so 3,000,000 baud on the
++ * 24 MHz clock is factor 8, div 0 (+0x28 = 0x80000). Pick the (factor, div) pair with the smallest rate error; ties keep the larger factor (finer sampling).
++ */
++static void apple_s5l_pick_baud(unsigned long clk, unsigned int baud, unsigned int *factor, unsigned int *div)
++{
++	unsigned long best_err = ULONG_MAX;
++	unsigned int f;
++
++	*factor = 16;
++	*div = 0;
++	if (!baud)
++		return;
++
++	for (f = 16; f >= 4; f--) {
++		unsigned long denom = (unsigned long)f * baud;
++		unsigned long d = (clk + denom / 2) / denom;	/* d = div + 1 */
++		unsigned long actual, err;
++
++		if (d < 1)
++			d = 1;
++		if (d > 0x10000)
++			continue;
++		actual = clk / (f * d);
++		err = actual > baud ? actual - baud : baud - actual;
++		if (err < best_err) {
++			best_err = err;
++			*factor = f;
++			*div = d - 1;
++		}
++	}
++}
+ 
+ static void s3c24xx_serial_set_termios(struct uart_port *port,
+ 				       struct ktermios *termios,
+@@ -1561,8 +1596,16 @@
+ 	uart_port_lock_irqsave(port, &flags);
+ 
+ 	wr_regl(port, S3C2410_ULCON, ulcon);
+-	wr_regl(port, S3C2410_UBRDIV, quot);
++	if (ourport->apple_baud_factor && ourport->baudclk_rate) {
++		unsigned int factor, div;
+ 
++		apple_s5l_pick_baud(ourport->baudclk_rate, baud, &factor, &div);
++		dev_dbg(port->dev, "apple baud %u: factor %u div %u\n", baud, factor, div);
++		wr_regl(port, S3C2410_UBRDIV, ((16 - factor) << 16) | div);
++	} else {
++		wr_regl(port, S3C2410_UBRDIV, quot);
++	}
++
+ 	port->status &= ~UPSTAT_AUTOCTS;
+ 
+ 	umcon = rd_regl(port, S3C2410_UMCON);
+@@ -1983,6 +2026,7 @@
+ 	if (np) {
+ 		fifosize_prop = of_property_read_u32(np, "samsung,uart-fifosize",
+ 				&ourport->port.fifosize);
++		ourport->apple_baud_factor = of_property_read_bool(np, "apple,baud-factor-select");
+ 
+ 		if (of_property_read_u32(np, "reg-io-width", &prop) == 0) {
+ 			switch (prop) {

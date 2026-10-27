@@ -1,0 +1,68 @@
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -1248,6 +1248,56 @@
+ 	}
+ };
+ 
++#ifdef CONFIG_APPLE_DART_H1B_DIAG
++/*
++ * Test only (patch 0087): on a translation fault, walk the stream's page tables in software for the faulting page and print what the hardware sees:
++ * the four TTBR registers, the level-1 entry and the level-2 entry. Walked for the reported address as a page index (rebased, model A) and for the same
++ * page plus 0x80000 (the raw index of a rebased address). Run 34: the firmware's first read (idx buffer, host iova 0xbfffe000) faults with NO PTE at
++ * 0x3fffe000 although the host mapped it.
++ */
++static void apple_dart_h1b_walk(struct apple_dart *dart, u32 sid, u64 page)
++{
++	u32 ttbr = readl(dart->regs + DART_TTBR(dart, sid, (page >> 18) & 3));
++	u64 *l1, *l2;
++	u64 l1e, l2e = 0;
++	phys_addr_t l1_phys = ((phys_addr_t)(ttbr & 0xffffff)) << 12;
++
++	if (!(ttbr & BIT(31))) {
++		dev_err(dart->dev, "t7000-h1b: walk page 0x%llx: TTBR[%llu] 0x%08x not valid\n", page, (page >> 18) & 3, ttbr);
++		return;
++	}
++	l1 = memremap(l1_phys, PAGE_SIZE, MEMREMAP_WB);
++	if (!l1)
++		return;
++	l1e = le64_to_cpu(l1[(page >> 9) & 0x1ff]);
++	if ((l1e & 3) == 3) {
++		l2 = memremap(l1e & 0xffffff000ULL, PAGE_SIZE, MEMREMAP_WB);
++		if (l2) {
++			l2e = le64_to_cpu(l2[page & 0x1ff]);
++			memunmap(l2);
++		}
++	}
++	dev_err(dart->dev, "t7000-h1b: walk page 0x%llx: TTBR[%llu] 0x%08x l1[0x%llx] 0x%016llx l2[0x%llx] 0x%016llx\n",
++		page, (page >> 18) & 3, ttbr, (page >> 9) & 0x1ff, l1e, page & 0x1ff, l2e);
++	memunmap(l1);
++}
++
++static void apple_dart_h1b_fault_walk(struct apple_dart *dart, u32 sid, u32 addr)
++{
++	u64 page = addr >> PAGE_SHIFT;
++	int i;
++
++	for (i = 0; i < DART_MAX_TTBR; i++)
++		dev_err(dart->dev, "t7000-h1b: stream %u TTBR[%d] 0x%08x\n", sid, i, readl(dart->regs + DART_TTBR(dart, sid, i)));
++	apple_dart_h1b_walk(dart, sid, page);
++	apple_dart_h1b_walk(dart, sid, page + 0x80000);
++	apple_dart_h1b_walk(dart, sid, page - 1);
++	apple_dart_h1b_walk(dart, sid, page + 1);
++}
++#else
++static inline void apple_dart_h1b_fault_walk(struct apple_dart *dart, u32 sid, u32 addr) { }
++#endif
++
+ static irqreturn_t apple_dart_s5l8960x_irq(int irq, void *dev)
+ {
+ 	struct apple_dart *dart = dev;
+@@ -1284,6 +1334,7 @@
+ 		"translation fault: status:0x%x stream:%d code:0x%x (%s) at 0x%llx (raw error address 0x%08x)",
+ 		error, stream_idx, error_code, fault_name, addr | (cfg ? cfg->dma_min : 0), addr);
+ 
++	apple_dart_h1b_fault_walk(dart, stream_idx, addr);
+ 	writel(error, dart->regs + DART_S5L8960X_ERROR);
+ 	return IRQ_HANDLED;
+ }

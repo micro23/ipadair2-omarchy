@@ -1,0 +1,22 @@
+diff --git a/drivers/spi/spi-apple.c b/drivers/spi/spi-apple.c
+--- a/drivers/spi/spi-apple.c
++++ b/drivers/spi/spi-apple.c
+@@ -273,9 +273,17 @@
+ 	reg_write(spi, APPLE_SPI_CLKDIV, min_t(u32, cr, APPLE_SPI_CLKDIV_MAX));
+ 
+ 	/* Update bits per word */
+-	if (spi->type == APPLE_SPI_TYPE_S5L)
++	if (spi->type == APPLE_SPI_TYPE_S5L) {
++		u64 delay_ns = spi_delay_to_ns(&t->word_delay, t);
++
+ 		reg_mask(spi, APPLE_SPI_CFG, APPLE_SPI_CFG_WORD_SIZE,
+ 			 FIELD_PREP(APPLE_SPI_CFG_WORD_SIZE, t->bits_per_word >> 4));
++		/*
++		 * Inter-word delay (J81 touch controller needs 5 us, Apple's driver programs ceil(ns x pclk / 1e9) into this register,
++		 * research/2026-10-11-touch-no-ack-analysis.md). Written for every transfer so a transfer without a delay clears it again.
++		 */
++		reg_write(spi, APPLE_SPI_WORD_DELAY, DIV64_U64_ROUND_UP(delay_ns * clk_get_rate(spi->clk), NSEC_PER_SEC));
++	}
+ 	else
+ 		reg_mask(spi, APPLE_SPI_SHIFTCFG, APPLE_SPI_SHIFTCFG_BITS,
+ 			 FIELD_PREP(APPLE_SPI_SHIFTCFG_BITS, t->bits_per_word));

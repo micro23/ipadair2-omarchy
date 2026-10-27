@@ -1,0 +1,31 @@
+{
+  "descriptor_schema": "PASS: fields/types/constraints checked against exact Orchard schema v1 using a local recursive verifier (jsonschema package unavailable)",
+  "schema_source_revision": "9bcaef15ba0250503497d3754fa1254e48f96013",
+  "unchanged_source_files_verified": 115,
+  "python_files_parsed": 24,
+  "local_markdown_links": "PASS",
+  "json_toml": "PASS",
+  "CLI_help": "PASS",
+  "shell_syntax": "PASS",
+  "binary_files": 0,
+  "symlinks": 0,
+  "files_before_validation_receipt": 133,
+  "bytes_before_validation_receipt": 1353981,
+  "kernel_adapter": "Pinned Linux archive, baseline, all 26/63 patch inputs and compiler paths passed --check-inputs; full kernel compilation was not repeated.",
+  "assembly": {
+    "wifi-base": {
+      "bytes": 9858866,
+      "sha256": "589f66d414af53688ddb2c7e9e28cf8c82fcf146660128c1c9639e922408c81e",
+      "result": "Matches the original firmware-free payload exactly. Reused the exact prior kernel products and public loader inputs, and rebuilt base userspace and assembly through the new adapter."
+    },
+    "radio-id": {
+      "bytes": 9303786,
+      "sha256": "8e3944abab7190575c108030f0f7481807a546875c223b7d74ded6cce5f0202a",
+      "result": "Matches the original firmware-free payload exactly. Reused the exact prior kernel products and public loader inputs, and rebuilt base userspace and assembly through the new adapter."
+    }
+  },
+  "mac_assets_adapter": "Help and syntax checked. The original extraction routine was previously qualified on a Mac; the new adapter has not been executed on a Mac.",
+  "privacy_scope": "Only public sources, metadata and an intentionally redacted qualification summary were selected. No firmware bytes, captured ADT/OTP, device MAC/ECID, credentials or private reports are included. The standard zero MAC placeholder remains in the public DTS.",
+  "hardware_boot_performed_in_handoff_validation": false,
+  "source_completeness": "Original radio boot/identity orchestration and Wi-Fi orchestration are included as inspectable references. Their historical manifest/runtime dependencies remain explicitly unavailable as a runnable bundle in this source tree; corrected radio, scan and DNS parsers are mandatory."
+}

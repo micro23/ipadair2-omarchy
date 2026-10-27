@@ -1,0 +1,111 @@
+diff --git a/drivers/power/supply/j81_d2207_charger.c b/drivers/power/supply/j81_d2207_charger.c
+--- a/drivers/power/supply/j81_d2207_charger.c
++++ b/drivers/power/supply/j81_d2207_charger.c
+@@ -1,11 +1,20 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /*
+- * Read-only Apple J81 (T7001) D2207 charger reporting.
++ * Apple J81 (T7001) D2207 charger reporting, with a writable
++ * input-current-limit property.
+  *
+  * The register locations and conversions are recovered from Apple's
+  * D2207 power-source implementation and checked against live J81 reads.
+- * This driver intentionally has no set_property callback: charging policy
+- * writes remain a separate, meter-backed step.
++ * Stage 2 (docs/plans/2026-09-13-pmic-pcie-execution.md): the input
++ * current limit is exposed as a real, writable power-supply property
++ * using the exact encode/decode formula already validated live on
++ * hardware across all five tested tiers (100/500/1000/2100/2400 mA) by
++ * boot/ipad_console.py's console tool -- this driver's job is only to
++ * make that same validated write available through the standard sysfs
++ * interface (a convenience/permanence upgrade), not to add any new
++ * safety policy of its own. The thermal-abort/auto-restore behavior the
++ * console tool provides is deliberately userspace policy, not
++ * duplicated here.
+  */
+ #include <linux/device.h>
+ #include <linux/kernel.h>
+@@ -16,6 +25,9 @@
+ #include <linux/regmap.h>
+ #define J81_D2207_INPUT_CURRENT		0x04c0
+ #define J81_D2207_CHARGE_CURRENT_MAX	0x04cf
++/* Matches the get_property decode: valid non-saturated codes are 0..0xfd. */
++#define J81_D2207_INPUT_CURRENT_MIN_UA		75000
++#define J81_D2207_INPUT_CURRENT_MAX_UA		3262000
+ struct j81_d2207_charger {
+ 	struct regmap *regmap;
+ };
+@@ -26,6 +38,16 @@
+ 		return 3262;
+ 	return 75 + (100 * code + 7) / 8;
+ }
++/*
++ * Inverse of the above, matching boot/ipad_console.py's own
++ * _charging_current_code() exactly (round-trip validated live against
++ * all five tested tiers, not independently re-derived here).
++ */
++static unsigned int j81_d2207_input_current_code(int ma)
++{
++	int code = DIV_ROUND_CLOSEST((ma - 75) * 8 - 7, 100);
++	return clamp(code, 0, 0xfd);
++}
+ static enum power_supply_property j81_d2207_properties[] = {
+ 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+ 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX,
+@@ -56,12 +78,33 @@
+ 		return -EINVAL;
+ 	}
+ }
++static int j81_d2207_set_property(struct power_supply *psy,
++					 enum power_supply_property property,
++					 const union power_supply_propval *val)
++{
++	struct j81_d2207_charger *charger = power_supply_get_drvdata(psy);
++	unsigned int code;
++	int ua;
++	if (property != POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT)
++		return -EINVAL;
++	ua = clamp(val->intval, J81_D2207_INPUT_CURRENT_MIN_UA,
++		  J81_D2207_INPUT_CURRENT_MAX_UA);
++	code = j81_d2207_input_current_code(ua / 1000);
++	return regmap_write(charger->regmap, J81_D2207_INPUT_CURRENT, code);
++}
++static int j81_d2207_property_is_writeable(struct power_supply *psy,
++						  enum power_supply_property property)
++{
++	return property == POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT;
++}
+ static const struct power_supply_desc j81_d2207_desc = {
+ 	.name = "j81-d2207-charger",
+ 	.type = POWER_SUPPLY_TYPE_USB,
+ 	.properties = j81_d2207_properties,
+ 	.num_properties = ARRAY_SIZE(j81_d2207_properties),
+ 	.get_property = j81_d2207_get_property,
++	.set_property = j81_d2207_set_property,
++	.property_is_writeable = j81_d2207_property_is_writeable,
+ };
+ static int j81_d2207_probe(struct platform_device *pdev)
+ {
+@@ -93,5 +136,5 @@
+ 	},
+ };
+ module_platform_driver(j81_d2207_driver);
+-MODULE_DESCRIPTION("Read-only Apple J81 D2207 charger reporting");
++MODULE_DESCRIPTION("Apple J81 D2207 charger reporting with writable input-current-limit");
+ MODULE_LICENSE("GPL");
+diff --git a/arch/arm64/boot/dts/apple/t7001-air2.dtsi b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -162,7 +162,11 @@
+ 			compatible = "apple,arabela-pmic-bl", "apple,anya-pmic-bl";
+ 			reg = <0x600 0x2>;
+ 		};
+-		/* Read-only D2207 charger reporting; no PMIC writes are exposed. */
++		/*
++		 * D2207 charger reporting. input_current_limit is writable
++		 * (docs/plans/2026-09-13-pmic-pcie-execution.md's Stage 2) --
++		 * see the driver's own header comment for the exact scope.
++		 */
+ 		charger {
+ 			compatible = "apple,j81-d2207-charger";
+ 		};

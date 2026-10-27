@@ -1,0 +1,53 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -1049,13 +1049,14 @@
+ 
+ /*
+  * Read-only snapshot of the ChipCommon GPIO registers (gpiopullup 0x58, gpiopulldown 0x5c, gpioin 0x60, gpioout 0x64,
+- * gpioouten 0x68, gpiocontrol 0x6c) and the two registers Apple's driver writes next to them (0xc40, 0xe00). Apple
++ * gpioouten 0x68, gpiocontrol 0x6c). (0xc40 and 0xe00, which Apple's driver writes, were dropped in patch 0075: reading them with the
++ * firmware running killed the machine, run 16.) Apple
+  * makes chip GPIO 0 an output and drives it; this shows what the chip has while Linux does not. The BAR0 window is
+  * moved to ChipCommon for the reads and put back on PCIe2 afterwards, with the interrupt held off meanwhile.
+  */
+ static void h1b_log_chipcommon_gpio(struct brcmf_pciedev_info *devinfo, const char *when)
+ {
+-	static const u16 offs[] = { 0x58, 0x5c, 0x60, 0x64, 0x68, 0x6c, 0xc40, 0xe00 };
++	static const u16 offs[] = { 0x58, 0x5c, 0x60, 0x64, 0x68, 0x6c };
+ 	u32 v[ARRAY_SIZE(offs)];
+ 	int i;
+ 
+@@ -1070,7 +1071,7 @@
+ 	if (devinfo->irq_allocated)
+ 		enable_irq(devinfo->pdev->irq);
+ 	dev_info(&devinfo->pdev->dev, H1B_PREFIX "chipcommon gpio (%s): pullup 0x%08x pulldown 0x%08x in 0x%08x out 0x%08x "
+-		 "outen 0x%08x control 0x%08x reg 0xc40 0x%08x reg 0xe00 0x%08x\n", when, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]);
++		 "outen 0x%08x control 0x%08x\n", when, v[0], v[1], v[2], v[3], v[4], v[5]);
+ }
+ 
+ /*
+@@ -1244,7 +1245,6 @@
+ 	}
+ 	devinfo->irq_allocated = true;
+ 	h1b_log_msi(devinfo, "after request_irq");
+-	h1b_log_chipcommon_gpio(devinfo, "after request_irq");
+ 	h1b_console_poll_start(devinfo);
+ 	return 0;
+ }
+@@ -2568,13 +2568,13 @@
+  * Patch 0072: window-moving reads are limited to registers that have been read safely before. Reading the PCIe2 core
+  * 0x00-0xff in one sweep (run 12, Q1) killed the USB link and rebooted the iPad, so arbitrary offsets are not allowed.
+  * PCIe2: 0x20 IntStatus, 0x24 IntMask, 0x48 mailbox int, 0x4c mailbox mask, 0x140/0x144 H2D mailboxes (all read by the
+- * stock driver or Apple's). ChipCommon: the GPIO block 0x58-0x6c plus 0xc40 and 0xe00 (read in runs 8-10).
++ * stock driver or Apple's). ChipCommon: the GPIO block 0x58-0x6c only (0xc40/0xe00 removed in patch 0075).
+  */
+ static bool h1b_q_reg_ok(u16 coreid, u32 off)
+ {
+ 	if (coreid == BCMA_CORE_PCIE2)
+ 		return off == 0x20 || off == 0x24 || off == 0x48 || off == 0x4c || off == 0x140 || off == 0x144;
+-	return (off >= 0x58 && off <= 0x6c) || off == 0xc40 || off == 0xe00;
++	return off >= 0x58 && off <= 0x6c;
+ }
+ 
+ /*

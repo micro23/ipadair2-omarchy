@@ -1,0 +1,83 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -1403,7 +1403,30 @@
+ {
+ 	return h1b_apple_shared_mask & H1B_SHARED_NO_RINGUPD;
+ }
++/*
++ * Patch 0072: Apple's bus driver writes each common ring's id (u16 at +0) and type (u8 at +2) into the ring memory
++ * table. Linux leaves them alone, and the C2 firmware leaves them zero (run 12 dump), so every ring looks like
++ * id 0 / type 0. Apple's values per Linux ring number (H2D ctrl, H2D rxpost, D2H ctrl, D2H tx, D2H rx):
++ * id {0,1,0,1,2}, type {0,2,1,4,3}. brcmfmac.h1b_ring_ids=1 writes them (word = type << 16 | id).
++ */
++static unsigned int h1b_ring_ids_on;
++module_param_named(h1b_ring_ids, h1b_ring_ids_on, uint, 0444);
++MODULE_PARM_DESC(h1b_ring_ids, "J81 test: 1 write Apple's ring id/type words into the common-ring memory table");
++
++static const u32 h1b_apple_ring_idtype[BRCMF_NROF_COMMON_MSGRINGS] = {
++	0x00000000, 0x00020001, 0x00010000, 0x00040001, 0x00030002
++};
++
++static void h1b_write_ring_idtype(struct brcmf_pciedev_info *devinfo, u32 ring_id, u32 tcm_ring_phys_addr)
++{
++	if (!h1b_ring_ids_on)
++		return;
++	brcmf_pcie_write_tcm32(devinfo, tcm_ring_phys_addr, h1b_apple_ring_idtype[ring_id]);
++	dev_info(&devinfo->pdev->dev, "t7000-h1b: ring %u id/type word 0x%08x written (h1b_ring_ids)\n", ring_id,
++		 h1b_apple_ring_idtype[ring_id]);
++}
+ #else
++static inline void h1b_write_ring_idtype(struct brcmf_pciedev_info *devinfo, u32 ring_id, u32 tcm_ring_phys_addr) { }
+ static inline u32 h1b_ring_max_item(u32 ring_id) { return brcmf_ring_max_item[ring_id]; }
+ static inline u32 h1b_scratch_len(void) { return BRCMF_DMA_D2H_SCRATCH_BUF_LEN; }
+ static inline bool h1b_skip_ringupd(void) { return false; }
+@@ -1459,6 +1482,7 @@
+ 	brcmf_pcie_write_tcm16(devinfo, addr, h1b_ring_max_item(ring_id));
+ 	addr = tcm_ring_phys_addr + BRCMF_RING_LEN_ITEMS_OFFSET;
+ 	brcmf_pcie_write_tcm16(devinfo, addr, ring_itemsize_array[ring_id]);
++	h1b_write_ring_idtype(devinfo, ring_id, tcm_ring_phys_addr);
+ 
+ 	ring = kzalloc_obj(*ring);
+ 	if (!ring) {
+@@ -2537,6 +2561,19 @@
+ 		enable_irq(devinfo->pdev->irq);
+ }
+ 
++/*
++ * Patch 0072: window-moving reads are limited to registers that have been read safely before. Reading the PCIe2 core
++ * 0x00-0xff in one sweep (run 12, Q1) killed the USB link and rebooted the iPad, so arbitrary offsets are not allowed.
++ * PCIe2: 0x20 IntStatus, 0x24 IntMask, 0x48 mailbox int, 0x4c mailbox mask, 0x140/0x144 H2D mailboxes (all read by the
++ * stock driver or Apple's). ChipCommon: the GPIO block 0x58-0x6c plus 0xc40 and 0xe00 (read in runs 8-10).
++ */
++static bool h1b_q_reg_ok(u16 coreid, u32 off)
++{
++	if (coreid == BCMA_CORE_PCIE2)
++		return off == 0x20 || off == 0x24 || off == 0x48 || off == 0x4c || off == 0x140 || off == 0x144;
++	return (off >= 0x58 && off <= 0x6c) || off == 0xc40 || off == 0xe00;
++}
++
+ static void h1b_q_run(struct brcmf_pciedev_info *devinfo, const char *cmd)
+ {
+ 	char which[8];
+@@ -2552,6 +2589,7 @@
+ 		h1b_q_tcm(devinfo, "tcm", off, len);
+ 	} else if (sscanf(cmd, "core %7s %i %i", which, &off, &len) == 3) {
+ 		u16 id;
++		u32 len2;
+ 
+ 		if (!h1b_hold_mask) {
+ 			h1b_q_printf("error: core reads need brcmfmac.h1b_hold=1\n");
+@@ -2568,6 +2606,12 @@
+ 		if ((off | len) & 3 || !len || off >= 0x1000 || len > 0x1000 - off || !devinfo->ci) {
+ 			h1b_q_printf("error: core needs OFF,LEN multiples of 4 and OFF+LEN <= 0x1000\n");
+ 			return;
++		}
++		for (len2 = 0; len2 < len; len2 += 4) {
++			if (!h1b_q_reg_ok(id, off + len2)) {
++				h1b_q_printf("error: core offset 0x%x is not on the safe-register list\n", off + len2);
++				return;
++			}
+ 		}
+ 		h1b_q_core(devinfo, id, which, off, len);
+ 	} else if (!strncmp(cmd, "shared", 6)) {

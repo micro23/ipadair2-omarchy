@@ -1,0 +1,126 @@
+#!/bin/sh
+# J81-only, temporary diagnostic userspace. All regular files live in RAM.
+# Do not source the original postmarketOS init or its storage-related hooks.
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export TERM=linux
+umask 022
+
+/bin/busybox --install -s /bin
+J81_CONSOLE=/dev/console
+
+j81_log() {
+    printf '%s\n' "[j81-ram] $*"
+    printf '%s\n' "[j81-ram] $*" >> /run/init.log
+}
+
+j81_console() {
+    j81_log 'Console remains available. Exiting a shell starts a new shell.'
+    while :; do
+        setsid -c /bin/ram-shell <"$J81_CONSOLE" >"$J81_CONSOLE" 2>&1
+        sleep 1
+    done
+}
+
+j81_stop() {
+    j81_log "Startup stopped: $*"
+    j81_console
+}
+
+mount -t proc -o nosuid,nodev,noexec proc /proc || j81_stop 'proc mount failed'
+mount -t sysfs -o nosuid,nodev,noexec sysfs /sys || j81_stop 'sysfs mount failed'
+mount -t devtmpfs -o nosuid,mode=0755 devtmpfs /dev || j81_stop 'devtmpfs mount failed'
+mkdir -p /dev/pts
+mount -t devpts -o nosuid,noexec,mode=0620 devpts /dev/pts || j81_stop 'devpts mount failed'
+mount -t tmpfs -o nosuid,nodev,mode=0755 tmpfs /run || j81_stop 'run tmpfs mount failed'
+mount -t tmpfs -o nosuid,nodev,mode=1777 tmpfs /tmp || j81_stop 'tmp tmpfs mount failed'
+
+exec </dev/console >/dev/console 2>&1
+[ -c /dev/tty1 ] && J81_CONSOLE=/dev/tty1
+ln -s /proc/self/fd /dev/fd
+ln -s /proc/self/fd/0 /dev/stdin
+ln -s /proc/self/fd/1 /dev/stdout
+ln -s /proc/self/fd/2 /dev/stderr
+
+j81_log 'Temporary Linux diagnostic image; root filesystem and logs are in RAM.'
+
+# This is an additional userspace identity check, not a substitute for the
+# host-side ProductType/board check before choosing a kernel and device tree.
+if ! tr '\000' '\n' </proc/device-tree/compatible | grep -Fqx 'apple,j81'; then
+    j81_stop 'device tree does not identify the Wi-Fi iPad Air 2 (apple,j81)'
+fi
+if ! tr '\000' '\n' </proc/device-tree/compatible | grep -Fqx 'apple,t7001'; then
+    j81_stop 'device tree does not identify the A8X platform (apple,t7001)'
+fi
+
+# No mdev scans, block-device discovery, filesystem checks, partition tools,
+# firmware extraction, persistent mounts, or postmarketOS hooks run here.
+ifconfig lo 127.0.0.1 up
+printf '0\n' >/proc/sys/net/ipv4/ip_forward
+
+mount -t configfs -o nosuid,nodev,noexec configfs /config || j81_stop 'configfs mount failed'
+
+# Wait only for the USB device controller supplied by the kernel's J81 DTB.
+J81_WAIT=0
+J81_UDC=
+while [ "$J81_WAIT" -lt 20 ]; do
+    set -- /sys/class/udc/*
+    if [ -e "$1" ]; then
+        [ "$#" -eq 1 ] || j81_stop 'more than one USB device controller appeared'
+        J81_UDC=${1##*/}
+        break
+    fi
+    sleep 1
+    J81_WAIT=$((J81_WAIT + 1))
+done
+[ -n "$J81_UDC" ] || j81_stop 'no USB device controller appeared within 20 seconds'
+
+J81_GADGET=/config/usb_gadget/j81ram
+mkdir "$J81_GADGET" || j81_stop 'cannot create our USB gadget'
+
+# Keep the VID/PID of the previously reported postmarketOS control image.
+# The product/serial strings here are generic and disclose no device identity.
+printf '0x18d1\n' >"$J81_GADGET/idVendor" || j81_stop 'USB vendor setting failed'
+printf '0xd001\n' >"$J81_GADGET/idProduct" || j81_stop 'USB product setting failed'
+mkdir "$J81_GADGET/strings/0x409" || j81_stop 'USB string directory failed'
+printf 'J81 diagnostic\n' >"$J81_GADGET/strings/0x409/manufacturer"
+printf 'iPad Air 2 Linux RAM test\n' >"$J81_GADGET/strings/0x409/product"
+printf 'j81-ram-test\n' >"$J81_GADGET/strings/0x409/serialnumber"
+
+mkdir "$J81_GADGET/functions/ecm.usb0" || j81_stop 'ECM function unavailable in kernel'
+printf '02:4a:38:31:00:01\n' >"$J81_GADGET/functions/ecm.usb0/dev_addr" || j81_stop 'device MAC setting failed'
+printf '02:4a:38:31:00:02\n' >"$J81_GADGET/functions/ecm.usb0/host_addr" || j81_stop 'host MAC setting failed'
+mkdir "$J81_GADGET/configs/c.1" || j81_stop 'USB configuration failed'
+mkdir "$J81_GADGET/configs/c.1/strings/0x409" || j81_stop 'USB configuration strings failed'
+printf 'USB Ethernet\n' >"$J81_GADGET/configs/c.1/strings/0x409/configuration"
+ln -s "$J81_GADGET/functions/ecm.usb0" "$J81_GADGET/configs/c.1/ecm.usb0" || j81_stop 'USB function link failed'
+printf '%s\n' "$J81_UDC" >"$J81_GADGET/UDC" || j81_stop 'USB controller bind failed'
+
+J81_USB_IFACE=$(cat "$J81_GADGET/functions/ecm.usb0/ifname")
+[ -n "$J81_USB_IFACE" ] || j81_stop 'USB function supplied no interface name'
+ifconfig "$J81_USB_IFACE" 172.16.42.1 netmask 255.255.255.0 up || j81_stop 'USB IPv4 setup failed'
+
+# Offer exactly one address on the ECM interface. No default route or DNS
+# server is advertised and IPv4 forwarding remains disabled.
+cat >/run/udhcpd.conf <<EOF
+start 172.16.42.2
+end 172.16.42.2
+interface $J81_USB_IFACE
+max_leases 1
+auto_time 0
+decline_time 0
+conflict_time 0
+lease_file /run/udhcpd.leases
+pidfile /run/udhcpd.pid
+option subnet 255.255.255.0
+EOF
+/bin/busybox-extras udhcpd /run/udhcpd.conf || j81_stop 'USB DHCP server failed'
+
+# Direct USB diagnostic access only: no password, no SSH keys, no Wi-Fi.
+# Bind explicitly to the ECM address, never to all interfaces.
+/bin/busybox-extras telnetd -b 172.16.42.1:23 -l /bin/ram-shell || j81_stop 'USB shell server failed'
+
+j81_log "USB Ethernet ready on $J81_USB_IFACE; device 172.16.42.1, host 172.16.42.2."
+j81_log 'USB diagnostic shell: telnet 172.16.42.1 23 (no authentication).'
+j81_log 'Startup mounts only proc, sysfs, devtmpfs, devpts, tmpfs, and configfs.'
+j81_console

@@ -1,0 +1,191 @@
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -218,6 +218,18 @@
+ 	u32 num_streams;
+ 	u32 supports_bypass : 1;
+ 	u32 four_level : 1;
++
++	/*
++	 * J81/T7000 PCIe DART options (patch 0089), from the device tree. All off when the properties are absent.
++	 * apple,ios-pte: Apple's S5L8960X entry format. apple,pci-alias: also map PCI window pages at the raw index.
++	 * apple,error-reflector/fetch-config/diag-config: Apple's start-up values (ADT dart-apcie1), written in Apple's order.
++	 */
++	u32 ios_pte : 1;
++	u32 pci_alias : 1;
++	u32 has_apple_init : 1;
++	u32 error_reflector;
++	u32 fetch_config;
++	u32 diag_config;
+ 
+ 	struct iommu_group *sid2group[DART_MAX_STREAMS];
+ 	struct iommu_device iommu;
+@@ -572,30 +584,39 @@
+ }
+ 
+ /*
+- * Test only (patch 0085): apple_dart.h1b_apple_init=1 gives the J81 PCIe DART (602002000.iommu) Apple's start-up order from
+- * AppleS5L8960XDART::_dartRecoverFromPowerdown: the error-reflector write (+0x24 = error-reflector >> 12) BEFORE anything is read, then
+- * fetch-config (+0x30) and diag-config (+0x20) from the ADT node dart-apcie1. Linux starts by reading +0x00 and writes neither. Run 32: the
+- * firmware's first DMA read through this DART resets the machine; this tests whether the missing configuration is why.
++ * Apple's AppleS5L8960XDART::_dartRecoverFromPowerdown order for the J81 PCIe DART (patch 0089, from patches 0085/0088): the error-reflector
++ * value is written to +0x24 BEFORE anything is read, then fetch-config (+0x30) and diag-config (+0x20). The values come from the device tree
++ * (apple,error-reflector, apple,fetch-config, apple,diag-config; the ADT node dart-apcie1). Without the error reflector a DART fault is not
++ * reported as an interrupt: the SoC resets silently (runs 13-31), so the first device DMA read killed the machine. Linux used to start with a read
++ * of +0x00 and write none of these.
+  */
+-#ifdef CONFIG_APPLE_DART_H1B_DIAG
+-#define H1B_DART_ERROR_REFLECTOR	0x24
+-#define H1B_DART_DIAG_CONFIG		0x20
+-#define H1B_DART_FETCH_CONFIG		0x30
+-#define H1B_APCIE1_ERROR_REFLECTOR	0x0020ffff
+-#define H1B_APCIE1_DIAG_CONFIG		0x00000100
+-#define H1B_APCIE1_FETCH_CONFIG		0x000e0303
++#define APPLE_DART_S5L8960X_DIAG_CONFIG		0x20
++#define APPLE_DART_S5L8960X_ERROR_REFLECTOR	0x24
++#define APPLE_DART_S5L8960X_FETCH_CONFIG	0x30
++
++/* Module parameters stay as overrides (1 forces on, e.g. for another device) on top of the device-tree properties. */
+ static unsigned int apple_dart_h1b_apple_init;
+ module_param_named(h1b_apple_init, apple_dart_h1b_apple_init, uint, 0444);
+-MODULE_PARM_DESC(h1b_apple_init, "J81 test: 1 write the J81 PCIe DART's error-reflector first, then fetch/diag-config, as Apple does");
++MODULE_PARM_DESC(h1b_apple_init, "J81: 1 force Apple's error-reflector/fetch/diag-config start-up with the J81 PCIe DART values (normally from the device tree)");
+ 
+-static bool apple_dart_h1b_is_apcie1(struct apple_dart *dart)
++static void apple_dart_parse_apple_init(struct apple_dart *dart)
+ {
+-	return apple_dart_h1b_apple_init && dart->hw->type == DART_S5L8960X &&
+-	       !strncmp(dev_name(dart->dev), "602002000.", 10);
++	struct device_node *np = dart->dev->of_node;
++
++	if (dart->hw->type != DART_S5L8960X)
++		return;
++
++	if (!of_property_read_u32(np, "apple,error-reflector", &dart->error_reflector)) {
++		dart->has_apple_init = 1;
++		of_property_read_u32(np, "apple,fetch-config", &dart->fetch_config);
++		of_property_read_u32(np, "apple,diag-config", &dart->diag_config);
++	} else if (apple_dart_h1b_apple_init && !strncmp(dev_name(dart->dev), "602002000.", 10)) {
++		dart->has_apple_init = 1;
++		dart->error_reflector = 0x0020ffff;
++		dart->fetch_config = 0x000e0303;
++		dart->diag_config = 0x00000100;
++	}
+ }
+-#else
+-static inline bool apple_dart_h1b_is_apcie1(struct apple_dart *dart) { return false; }
+-#endif
+ 
+ static int apple_dart_hw_reset(struct apple_dart *dart)
+ {
+@@ -603,12 +624,8 @@
+ 	struct apple_dart_stream_map stream_map;
+ 	int i;
+ 
+-#ifdef CONFIG_APPLE_DART_H1B_DIAG
+-	if (apple_dart_h1b_is_apcie1(dart)) {
+-		dev_info(dart->dev, "t7000-h1b: Apple DART start-up: error-reflector 0x%08x first\n", H1B_APCIE1_ERROR_REFLECTOR);
+-		writel(H1B_APCIE1_ERROR_REFLECTOR, dart->regs + H1B_DART_ERROR_REFLECTOR);
+-	}
+-#endif
++	if (dart->has_apple_init)
++		writel(dart->error_reflector, dart->regs + APPLE_DART_S5L8960X_ERROR_REFLECTOR);
+ 
+ 	config = readl(dart->regs + dart->hw->lock);
+ 	if (config & dart->hw->lock_bit) {
+@@ -631,14 +648,10 @@
+ 	/* clear any pending errors before the interrupt is unmasked */
+ 	writel(readl(dart->regs + dart->hw->error), dart->regs + dart->hw->error);
+ 
+-#ifdef CONFIG_APPLE_DART_H1B_DIAG
+-	if (apple_dart_h1b_is_apcie1(dart)) {
+-		writel(H1B_APCIE1_FETCH_CONFIG, dart->regs + H1B_DART_FETCH_CONFIG);
+-		writel(H1B_APCIE1_DIAG_CONFIG, dart->regs + H1B_DART_DIAG_CONFIG);
+-		dev_info(dart->dev, "t7000-h1b: Apple DART start-up: fetch-config 0x%08x diag-config 0x%08x written\n",
+-			 H1B_APCIE1_FETCH_CONFIG, H1B_APCIE1_DIAG_CONFIG);
++	if (dart->has_apple_init) {
++		writel(dart->fetch_config, dart->regs + APPLE_DART_S5L8960X_FETCH_CONFIG);
++		writel(dart->diag_config, dart->regs + APPLE_DART_S5L8960X_DIAG_CONFIG);
+ 	}
+-#endif
+ 
+ 	if (dart->hw->type == DART_T8110)
+ 		writel(0,  dart->regs + DART_T8110_ERROR_MASK);
+@@ -707,7 +720,7 @@
+  */
+ static int apple_dart_pci_alias;
+ module_param_named(pci_alias, apple_dart_pci_alias, int, 0444);
+-MODULE_PARM_DESC(pci_alias, "J81 test: 1 also map PCI window pages at the raw (un-rebased) DART index");
++MODULE_PARM_DESC(pci_alias, "J81: 1 force mapping PCI window pages also at the raw (un-rebased) DART index (normally apple,pci-alias in the device tree)");
+ 
+ /*
+  * Test only (patch 0081): apple_dart.ios_pte=1 makes the S5L8960X DART use the entry format Apple's iOS 8.1 AppleS5L8960XDART writes: valid bit 1,
+@@ -716,7 +729,7 @@
+  */
+ static int apple_dart_ios_pte;
+ module_param_named(ios_pte, apple_dart_ios_pte, int, 0444);
+-MODULE_PARM_DESC(ios_pte, "J81 test: 1 write iOS-style S5L8960X DART page-table entries");
++MODULE_PARM_DESC(ios_pte, "J81: 1 force iOS-style S5L8960X DART page-table entries (normally apple,ios-pte in the device tree)");
+ 
+ static int apple_dart_map_pages(struct iommu_domain *domain, unsigned long iova,
+ 				phys_addr_t paddr, size_t pgsize,
+@@ -819,10 +832,8 @@
+ 		.iommu_dev = dart->dev,
+ 	};
+ 
+-	if (apple_dart_ios_pte && dart->hw->type == DART_S5L8960X) {
++	if ((apple_dart_ios_pte || dart->ios_pte) && dart->hw->type == DART_S5L8960X)
+ 		pgtbl_cfg.apple_dart_cfg.ios_pte = true;
+-		dev_info(dart->dev, "t7000-h1b: iOS-style S5L8960X DART entries (ios_pte)\n");
+-	}
+ 
+ 	dart_domain->pgtbl_ops = alloc_io_pgtable_ops(dart->hw->fmt, &pgtbl_cfg,
+ 						      &dart_domain->domain);
+@@ -843,10 +854,8 @@
+ 			goto done;
+ 		}
+ 		dart_domain->mask = ~cfg->dma_min;
+-		if (apple_dart_pci_alias && cfg->pci_window) {
++		if ((apple_dart_pci_alias || dart->pci_alias) && cfg->pci_window)
+ 			dart_domain->alias_mask = DMA_BIT_MASK(pgtbl_cfg.ias);
+-			dev_info(dart->dev, "t7000-h1b: pci window pages are also mapped at the raw index (pci_alias)\n");
+-		}
+ 	} else {
+ 		dart_domain->mask = DMA_BIT_MASK(pgtbl_cfg.ias);
+ 	}
+@@ -1613,6 +1622,12 @@
+ 	dart->dev = dev;
+ 	dart->hw = of_device_get_match_data(dev);
+ 	spin_lock_init(&dart->lock);
++
++	dart->ios_pte = of_property_read_bool(dev->of_node, "apple,ios-pte");
++	dart->pci_alias = of_property_read_bool(dev->of_node, "apple,pci-alias");
++	apple_dart_parse_apple_init(dart);
++	if (dart->ios_pte || dart->pci_alias || dart->has_apple_init)
++		dev_info(dev, "J81 PCIe DART options: ios-pte %u pci-alias %u apple-init %u\n", dart->ios_pte, dart->pci_alias, dart->has_apple_init);
+ 
+ 	dart->regs = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
+ 	if (IS_ERR(dart->regs))
+diff --git a/drivers/iommu/io-pgtable-dart.c b/drivers/iommu/io-pgtable-dart.c
+--- a/drivers/iommu/io-pgtable-dart.c
++++ b/drivers/iommu/io-pgtable-dart.c
+@@ -27,13 +27,13 @@
+ #include "iommu-pages.h"
+ 
+ /*
+- * Test only (patch 0088): io_pgtable_dart.ios_leaf_bits=N ORs N (low 12 bits) into every iOS-format leaf entry on top of the fixed bit 1.
+- * Runs 34/35: with ios_pte the DART accepts the directory entry (|3) but reports NO PTE for a present leaf (|2); Apple's decompile shows an
+- * extra flag in bit 0 that the lookup returns as `& 1`. This lets the boot arguments try bit 0 (=1) and other candidates without a rebuild.
+- */
+-static unsigned int ios_leaf_bits;
++ * iOS-format S5L8960X leaf entries are (pfn << 12) | 3 (patch 0088, now the default): bit 1 plus bit 0. Apple's decompile writes `| 2` and the lookup returns a
++ * flag in bit 0; on the real J81 DART a leaf with only bit 1 is ignored (NO PTE FOR IOVA) and bits 1+0 translate (run 37, D19). io_pgtable_dart.ios_leaf_bits
++ * is kept as an override: the value (low 12 bits) is ORed in on top of bit 1 for experiments (0 reproduces the old `| 2` leaf).
++ */
++static unsigned int ios_leaf_bits = 1;
+ module_param(ios_leaf_bits, uint, 0444);
+-MODULE_PARM_DESC(ios_leaf_bits, "J81 test: extra low bits ORed into iOS-format DART leaf entries");
++MODULE_PARM_DESC(ios_leaf_bits, "J81: low bits ORed into iOS-format DART leaf entries on top of bit 1 (default 1 = leaf | 3)");
+ 
+ #define DART1_MAX_ADDR_BITS	36
+ 

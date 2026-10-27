@@ -1,0 +1,19 @@
+{
+  "kernel_release": "7.3.0-rc1-j81-wifi-ram",
+  "variant": "wifi",
+  "hardware_tested": false,
+  "files": {
+    "Image": {
+      "bytes": 19735040,
+      "sha256": "63b01ee33e960e5bac1d57a72761993cb846ea93af05d5f05a0e68c78e418bf1"
+    },
+    "kernel.config": {
+      "bytes": 136244,
+      "sha256": "061a2e31f3d53e7549bd292539717119fb3cc63f4eb4816f286abd601675082f"
+    },
+    "t7001-j81.dtb": {
+      "bytes": 23654,
+      "sha256": "65256b48e40e99aa1e1a1bb80e9351000d78d20dff3d862126a1f30c85b8dca2"
+    }
+  }
+}

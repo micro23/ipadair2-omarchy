@@ -1,0 +1,35 @@
+diff --git a/drivers/iommu/io-pgtable-dart.c b/drivers/iommu/io-pgtable-dart.c
+--- a/drivers/iommu/io-pgtable-dart.c
++++ b/drivers/iommu/io-pgtable-dart.c
+@@ -18,12 +18,22 @@
+ #include <linux/bitops.h>
+ #include <linux/io-pgtable.h>
+ #include <linux/kernel.h>
++#include <linux/moduleparam.h>
+ #include <linux/sizes.h>
+ #include <linux/slab.h>
+ #include <linux/types.h>
+ 
+ #include <asm/barrier.h>
+ #include "iommu-pages.h"
++
++/*
++ * Test only (patch 0088): io_pgtable_dart.ios_leaf_bits=N ORs N (low 12 bits) into every iOS-format leaf entry on top of the fixed bit 1.
++ * Runs 34/35: with ios_pte the DART accepts the directory entry (|3) but reports NO PTE for a present leaf (|2); Apple's decompile shows an
++ * extra flag in bit 0 that the lookup returns as `& 1`. This lets the boot arguments try bit 0 (=1) and other candidates without a rebuild.
++ */
++static unsigned int ios_leaf_bits;
++module_param(ios_leaf_bits, uint, 0444);
++MODULE_PARM_DESC(ios_leaf_bits, "J81 test: extra low bits ORed into iOS-format DART leaf entries");
+ 
+ #define DART1_MAX_ADDR_BITS	36
+ 
+@@ -130,7 +140,7 @@
+ 
+ 	if (data->ios_pte) {
+ 		/* iOS AppleS5L8960XDART: entry = (pfn << 12) | 2, no subpage or protection fields */
+-		pte = BIT(1);
++		pte = BIT(1) | (ios_leaf_bits & 0xfff);
+ 	} else {
+ 		/* subpage protection: always allow access to the entire page */
+ 		pte |= FIELD_PREP(APPLE_DART_PTE_SUBPAGE_START, 0);

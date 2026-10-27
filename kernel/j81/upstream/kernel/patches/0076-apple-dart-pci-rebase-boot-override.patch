@@ -1,0 +1,41 @@
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -977,6 +977,15 @@
+ 	return 0;
+ }
+ 
++/*
++ * Test only (patch 0076): override the PCI IOVA indexing model chosen by the device tree (`apple,iova-rebase`) at boot:
++ * apple_dart.pci_rebase=1 Apple's rebased PTE indexing (model A), =0 raw indexing (model B), -1 (default) as the DT says.
++ * Neither model has been exercised by a real device DMA yet: the first one (run 18) reset the iPad.
++ */
++static int apple_dart_pci_rebase = -1;
++module_param_named(pci_rebase, apple_dart_pci_rebase, int, 0444);
++MODULE_PARM_DESC(pci_rebase, "J81 test: 1 rebased PTE indexing (model A), 0 raw (model B), -1 as in the device tree");
++
+ static int apple_dart_of_xlate(struct device *dev,
+ 			       const struct of_phandle_args *args)
+ {
+@@ -1037,6 +1046,10 @@
+ 			}
+ 			pci_window = true;
+ 			no_rebase = !of_property_read_bool(apple_dart_pci_bridge_node(dev), "apple,iova-rebase");
++			if (apple_dart_pci_rebase >= 0) {
++				no_rebase = !apple_dart_pci_rebase;
++				dev_info(dev, "t7000-h1b: pci iova model forced by boot argument: %s\n", no_rebase ? "raw (B)" : "rebased (A)");
++			}
+ 		}
+ 	}
+ 
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -1602,6 +1602,7 @@
+ 	} else {
+ 		memset(devinfo->idxbuf, 0, bufsz);
+ 		devinfo->idxbuf_sz = bufsz;
++		h1b_log_dma(devinfo, "idxbuf", devinfo->idxbuf_dmahandle, bufsz);
+ 		idx_offset = devinfo->dma_idx_sz;
+ 		devinfo->write_ptr = brcmf_pcie_write_idx;
+ 		devinfo->read_ptr = brcmf_pcie_read_idx;

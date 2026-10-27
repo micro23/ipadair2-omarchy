@@ -1,0 +1,74 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -1992,6 +1992,28 @@
+ }
+ 
+ 
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++/*
++ * Test only (patch 0079): brcmfmac.h1b_tcm_idx=1 does not use the firmware's host-memory (DMA) ring indices, so the first doorbell needs no DMA for
++ * the indices. brcmfmac.h1b_bell_only=1 rings the host-to-device doorbell once after the last setup phase, before any ring item exists, and
++ * waits h1b_step_s seconds (8 if unset) logging the outcome, then carries on. Together they answer: does a doorbell with nothing to DMA reset the machine
++ * (run 22: only the first doorbell kills it), or only the firmware's first ring read?
++ */
++static unsigned int h1b_tcm_idx;
++module_param_named(h1b_tcm_idx, h1b_tcm_idx, uint, 0444);
++MODULE_PARM_DESC(h1b_tcm_idx, "J81 test: 1 decline the firmware's host-memory ring indices (use TCM indices)");
++static unsigned int h1b_bell_only;
++module_param_named(h1b_bell_only, h1b_bell_only, uint, 0444);
++MODULE_PARM_DESC(h1b_bell_only, "J81 test: 1 ring the doorbell once before attach, with empty rings, and wait");
++
++static bool h1b_tcm_idx_forced(void)
++{
++	return h1b_tcm_idx;
++}
++#else
++static inline bool h1b_tcm_idx_forced(void) { return false; }
++#endif
++
+ static int
+ brcmf_pcie_init_share_ram_info(struct brcmf_pciedev_info *devinfo,
+ 			       u32 sharedram_addr)
+@@ -2014,7 +2036,9 @@
+ 	}
+ 
+ 	/* check firmware support dma indicies */
+-	if (shared->flags & BRCMF_PCIE_SHARED_DMA_INDEX) {
++	if (h1b_tcm_idx_forced()) {
++		dev_info(&devinfo->pdev->dev, "t7000-h1b: host-memory indices declined (h1b_tcm_idx), using TCM indices\n");
++	} else if (shared->flags & BRCMF_PCIE_SHARED_DMA_INDEX) {
+ 		if (shared->flags & BRCMF_PCIE_SHARED_DMA_2B_IDX)
+ 			devinfo->dma_idx_sz = sizeof(u16);
+ 		else
+@@ -2909,6 +2933,22 @@
+ static inline void h1b_step(struct brcmf_pciedev_info *devinfo, const char *what) { }
+ #endif
+ 
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++static void h1b_bell_only_test(struct brcmf_pciedev_info *devinfo)
++{
++	if (!h1b_bell_only)
++		return;
++	dev_info(&devinfo->pdev->dev, "t7000-h1b: bell-only test: ringing H2D mailbox 0 once with empty rings\n");
++	brcmf_pcie_write_reg32(devinfo, devinfo->reginfo->h2d_mailbox_0, 1);
++	ssleep(h1b_step_s ? h1b_step_s : 8);
++	dev_info(&devinfo->pdev->dev, "t7000-h1b: bell-only test: survived, mailbox int 0x%x h2d_mailbox_0 0x%x\n",
++		 brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->mailboxint),
++		 brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->h2d_mailbox_0));
++}
++#else
++static inline void h1b_bell_only_test(struct brcmf_pciedev_info *devinfo) { }
++#endif
++
+ static void brcmf_pcie_setup(struct device *dev, int ret,
+ 			     struct brcmf_fw_request *fwreq)
+ {
+@@ -2996,6 +3036,7 @@
+ 	init_waitqueue_head(&devinfo->mbdata_resp_wait);
+ 
+ 	h1b_step(devinfo, "msgbuf hookup, before attach");
++	h1b_bell_only_test(devinfo);
+ 
+ 	ret = brcmf_attach(&devinfo->pdev->dev);
+ 	if (ret)

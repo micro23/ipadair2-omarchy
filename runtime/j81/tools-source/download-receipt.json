@@ -1,0 +1,24 @@
+{
+  "files": [
+    {
+      "url": "https://www.kernel.org/pub/software/network/iw/sha256sums.asc",
+      "file": "sha256sums.asc",
+      "bytes": 12793,
+      "sha256": "44dd286dfcc93b47f90c4ba32f5f391b2822ca4b0b75034fe398e3387b650e3e"
+    },
+    {
+      "url": "https://www.kernel.org/pub/software/network/iw/iw-6.17.tar.xz",
+      "file": "iw-6.17.tar.xz",
+      "bytes": 163756,
+      "sha256": "7d182e498289ab39b257da6780d562e415377107f50358ee5b55b8cfe40b1e33"
+    },
+    {
+      "url": "https://www.kernel.org/pub/software/network/iw/iw-6.17.tar.sign",
+      "file": "iw-6.17.tar.sign",
+      "bytes": 566,
+      "sha256": "0602e72c06f4717f98019a73f5519c89ecc2cf2aa1fa05d2f1d40b690e11e1d5"
+    }
+  ],
+  "published_sha256_matches": true,
+  "pgp_signature_verified": false
+}

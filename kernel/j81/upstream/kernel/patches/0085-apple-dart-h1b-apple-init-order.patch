@@ -1,0 +1,66 @@
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -557,13 +557,46 @@
+ {
+ 	return apple_dart_t8110_hw_tlb_command(
+ 		stream_map, DART_T8110_TLB_CMD_OP_FLUSH_SID);
++}
++
++/*
++ * Test only (patch 0085): apple_dart.h1b_apple_init=1 gives the J81 PCIe DART (602002000.iommu) Apple's start-up order from
++ * AppleS5L8960XDART::_dartRecoverFromPowerdown: the error-reflector write (+0x24 = error-reflector >> 12) BEFORE anything is read, then
++ * fetch-config (+0x30) and diag-config (+0x20) from the ADT node dart-apcie1. Linux starts by reading +0x00 and writes neither. Run 32: the
++ * firmware's first DMA read through this DART resets the machine; this tests whether the missing configuration is why.
++ */
++#ifdef CONFIG_APPLE_DART_H1B_DIAG
++#define H1B_DART_ERROR_REFLECTOR	0x24
++#define H1B_DART_DIAG_CONFIG		0x20
++#define H1B_DART_FETCH_CONFIG		0x30
++#define H1B_APCIE1_ERROR_REFLECTOR	0x0020ffff
++#define H1B_APCIE1_DIAG_CONFIG		0x00000100
++#define H1B_APCIE1_FETCH_CONFIG		0x000e0303
++static unsigned int apple_dart_h1b_apple_init;
++module_param_named(h1b_apple_init, apple_dart_h1b_apple_init, uint, 0444);
++MODULE_PARM_DESC(h1b_apple_init, "J81 test: 1 write the J81 PCIe DART's error-reflector first, then fetch/diag-config, as Apple does");
++
++static bool apple_dart_h1b_is_apcie1(struct apple_dart *dart)
++{
++	return apple_dart_h1b_apple_init && dart->hw->type == DART_S5L8960X &&
++	       !strncmp(dev_name(dart->dev), "602002000.", 10);
+ }
++#else
++static inline bool apple_dart_h1b_is_apcie1(struct apple_dart *dart) { return false; }
++#endif
+ 
+ static int apple_dart_hw_reset(struct apple_dart *dart)
+ {
+ 	u32 config;
+ 	struct apple_dart_stream_map stream_map;
+ 	int i;
++
++#ifdef CONFIG_APPLE_DART_H1B_DIAG
++	if (apple_dart_h1b_is_apcie1(dart)) {
++		dev_info(dart->dev, "t7000-h1b: Apple DART start-up: error-reflector 0x%08x first\n", H1B_APCIE1_ERROR_REFLECTOR);
++		writel(H1B_APCIE1_ERROR_REFLECTOR, dart->regs + H1B_DART_ERROR_REFLECTOR);
++	}
++#endif
+ 
+ 	config = readl(dart->regs + dart->hw->lock);
+ 	if (config & dart->hw->lock_bit) {
+@@ -586,6 +619,15 @@
+ 	/* clear any pending errors before the interrupt is unmasked */
+ 	writel(readl(dart->regs + dart->hw->error), dart->regs + dart->hw->error);
+ 
++#ifdef CONFIG_APPLE_DART_H1B_DIAG
++	if (apple_dart_h1b_is_apcie1(dart)) {
++		writel(H1B_APCIE1_FETCH_CONFIG, dart->regs + H1B_DART_FETCH_CONFIG);
++		writel(H1B_APCIE1_DIAG_CONFIG, dart->regs + H1B_DART_DIAG_CONFIG);
++		dev_info(dart->dev, "t7000-h1b: Apple DART start-up: fetch-config 0x%08x diag-config 0x%08x written\n",
++			 H1B_APCIE1_FETCH_CONFIG, H1B_APCIE1_DIAG_CONFIG);
++	}
++#endif
++
+ 	if (dart->hw->type == DART_T8110)
+ 		writel(0,  dart->regs + DART_T8110_ERROR_MASK);
+ 

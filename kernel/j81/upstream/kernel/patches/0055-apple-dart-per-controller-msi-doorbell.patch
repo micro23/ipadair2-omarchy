@@ -1,0 +1,86 @@
+diff --git a/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml b/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
+--- a/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
++++ b/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
+@@ -21,6 +21,15 @@
+       verifies only GPIO3 (configuration register 0x0403), then waits 100 ms
+       before PCIe setup. It does not describe or control Bluetooth.
+ 
++  apple,msi-doorbell:
++    $ref: /schemas/types.yaml#/definitions/uint64
++    description: |
++      Physical address of the controller's MSI doorbell page (the ADT
++      `msi-address`; 0xbffff000 on J81). The Apple DART reserves this page as an
++      IOMMU_RESV_MSI region for every PCI device behind the controller so DMA
++      mappings never use it. When absent the DART falls back to its global
++      CONFIG_PCIE_APPLE_MSI_DOORBELL_ADDR (0xfffff000, the M1 family value).
++
+ additionalProperties: true
+ 
+ examples:
+@@ -28,3 +37,5 @@
+     pcie@610000000 {
+       compatible = "apple,t7000-pcie";
+       apple,reg-on-pmic = <&d2207>;
++      apple,msi-doorbell = <0x0 0xbffff000>;
++    };
+diff --git a/arch/arm64/boot/dts/apple/t7001-air2.dtsi b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -191,4 +191,10 @@
+ 	 * GPIO and is intentionally not described by this Wi-Fi-only resource.
+ 	 */
+ 	apple,reg-on-pmic = <&d2207>;
++
++	/*
++	 * MSI doorbell page from the ADT (`msi-address`). The DART reserves it so DMA
++	 * mappings never use it. No MSI domain exists yet, so nothing writes to it.
++	 */
++	apple,msi-doorbell = <0x0 0xbffff000>;
+ };
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -1137,14 +1137,41 @@
+ #endif
+ #define DOORBELL_ADDR	(CONFIG_PCIE_APPLE_MSI_DOORBELL_ADDR & PAGE_MASK)
+ 
++/*
++ * MSI doorbell page of the PCIe host bridge above a PCI device, if its controller node
++ * declares one with `apple,msi-doorbell` (a 64-bit address). The doorbell differs per
++ * controller generation (0xfffff000 on the M1 family, 0xbffff000 on the T7000 family), so
++ * it comes from the controller's own node rather than one global constant.
++ */
++static bool apple_dart_pci_msi_doorbell(struct device *dev, u64 *doorbell)
++{
++	struct pci_host_bridge *bridge = pci_find_host_bridge(to_pci_dev(dev)->bus);
++	struct device *parent = bridge ? bridge->dev.parent : NULL;
++
++	return parent && parent->of_node &&
++	       !of_property_read_u64(parent->of_node, "apple,msi-doorbell", doorbell);
++}
++
+ static void apple_dart_get_resv_regions(struct device *dev,
+ 					struct list_head *head)
+ {
+-	if (IS_ENABLED(CONFIG_PCIE_APPLE) && dev_is_pci(dev)) {
++	u64 doorbell = 0;
++	bool have_doorbell = false;
++
++	if (dev_is_pci(dev)) {
++		have_doorbell = apple_dart_pci_msi_doorbell(dev, &doorbell);
++		/* No per-controller doorbell: keep the global Kconfig behaviour. */
++		if (!have_doorbell && IS_ENABLED(CONFIG_PCIE_APPLE)) {
++			doorbell = DOORBELL_ADDR;
++			have_doorbell = true;
++		}
++	}
++
++	if (have_doorbell) {
+ 		struct iommu_resv_region *region;
+ 		int prot = IOMMU_WRITE | IOMMU_NOEXEC | IOMMU_MMIO;
+ 
+-		region = iommu_alloc_resv_region(DOORBELL_ADDR,
++		region = iommu_alloc_resv_region(doorbell & PAGE_MASK,
+ 						 PAGE_SIZE, prot,
+ 						 IOMMU_RESV_MSI, GFP_KERNEL);
+ 		if (!region)

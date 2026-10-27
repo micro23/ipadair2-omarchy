@@ -1,0 +1,24 @@
+diff --git a/arch/arm64/boot/dts/apple/t7001-air2.dtsi b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -146,6 +146,20 @@
+  */
+ &spi3 {
+ 	status = "okay";
++
++	/*
++	 * Touch SPI experiment child (research/j81-touch-spi-experiment-design.md, research/2026-10-11-touch-firmware-upload-spec.md): a spidev test device, deliberately NOT the
++	 * apple,j81-touchscreen compatible (binding apple_z2 would start reset, boot and firmware upload by itself). DISABLED here: only the touch experiment payload turns it on
++	 * (status = "okay" written into the DTB at assembly time), so every other boot is unchanged. SPI mode 2 (CPOL=1, CPHA=0, the corrected mode from the session handoff)
++	 * and 124 x 16 kHz = 1.984 MHz are the recovered starting points; boot/touch-diag overrides both per run.
++	 */
++	touch-diag@0 {
++		compatible = "rohm,dh2228fv";
++		reg = <0>;
++		spi-max-frequency = <1984000>;
++		spi-cpol;
++		status = "disabled";
++	};
+ };
+ 
+ &i2c0 {

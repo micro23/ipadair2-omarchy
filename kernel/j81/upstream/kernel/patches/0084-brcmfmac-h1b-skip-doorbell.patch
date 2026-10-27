@@ -1,0 +1,34 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -1352,6 +1352,16 @@
+ }
+ 
+ 
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++/*
++ * Test only (patch 0084): brcmfmac.h1b_no_bell=1 skips every H2D doorbell write (and logs the first few), so ring items and the write pointer
++ * are still written but the firmware is never told. Run 31 (feed0) reset at the first ioctl post; this separates the ring/pointer write from the bell.
++ */
++static unsigned int h1b_no_bell;
++module_param_named(h1b_no_bell, h1b_no_bell, uint, 0444);
++MODULE_PARM_DESC(h1b_no_bell, "J81 test: 1 skip the host-to-device doorbell write");
++#endif
++
+ static int brcmf_pcie_ring_mb_ring_bell(void *ctx)
+ {
+ 	struct brcmf_pcie_ringbuf *ring = (struct brcmf_pcie_ringbuf *)ctx;
+@@ -1359,6 +1369,13 @@
+ 
+ 	if (devinfo->state != BRCMFMAC_PCIE_STATE_UP)
+ 		return -EIO;
++
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++	if (h1b_no_bell) {
++		dev_info(&devinfo->pdev->dev, "t7000-h1b: doorbell skipped (h1b_no_bell)\n");
++		return 0;
++	}
++#endif
+ 
+ 	brcmf_dbg(PCIE, "RING !\n");
+ 	/* Any arbitrary value will do, lets use 1 */

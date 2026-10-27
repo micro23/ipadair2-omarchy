@@ -1,0 +1,355 @@
+diff --git a/drivers/pci/controller/Kconfig b/drivers/pci/controller/Kconfig
+--- a/drivers/pci/controller/Kconfig
++++ b/drivers/pci/controller/Kconfig
+@@ -72,6 +72,19 @@
+ 
+ 	  If unsure, say N.
+ 
++config PCIE_APPLE_T7000_BCM_PROBE
++	bool "Apple T7000 PCIe BCM4350 metadata observation probe (test kernels only)"
++	depends on PCIE_APPLE_T7000=y
++	help
++	  Binds to the J81 BCM4350 at boot, reads a small fixed set of ChipCommon
++	  metadata registers through the BAR0 window, logs them with the NVM
++	  mapping path they select, restores the window and declines the device.
++	  It writes nothing but the BAR0 window register, reads no NVM shadow
++	  bytes, and never enables bus mastering. Not for production kernels;
++	  do not combine with PCIE_APPLE_T7000_MSI_SELFTEST (same device).
++
++	  If unsure, say N.
++
+ config PCI_VERSATILE
+ 	bool "ARM Versatile PB PCI controller"
+ 	depends on ARCH_VERSATILE || COMPILE_TEST
+diff --git a/drivers/pci/controller/Makefile b/drivers/pci/controller/Makefile
+--- a/drivers/pci/controller/Makefile
++++ b/drivers/pci/controller/Makefile
+@@ -41,6 +41,7 @@
+ obj-$(CONFIG_PCIE_HISI_ERR) += pcie-hisi-error.o
+ obj-$(CONFIG_PCIE_APPLE) += pcie-apple.o
+ obj-$(CONFIG_PCIE_APPLE_T7000) += pcie-apple-t7000.o
++obj-$(CONFIG_PCIE_APPLE_T7000_BCM_PROBE) += pcie-apple-t7000-bcm-probe.o
+ obj-$(CONFIG_PCIE_MT7621) += pcie-mt7621.o
+ obj-$(CONFIG_PCIE_ASPEED) += pcie-aspeed.o
+ 
+diff --git a/drivers/pci/controller/pcie-apple-t7000-bcm-probe.c b/drivers/pci/controller/pcie-apple-t7000-bcm-probe.c
+--- /dev/null
++++ b/drivers/pci/controller/pcie-apple-t7000-bcm-probe.c
+@@ -0,0 +1,317 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Apple T7000 PCIe (iPad Air 2) BCM4350 metadata observation probe. TEST KERNELS ONLY.
++ *
++ * Phase 1a of docs/plans/2026-10-06-j81-wifi-dma-msi-path.md. It binds the J81 BCM4350
++ * (14e4:43a3), reads a fixed, small set of ChipCommon metadata registers, classifies which
++ * published NVM-shadow mapping path the observed revision would need, logs the result and
++ * declines the device (-ENODEV).
++ *
++ * What it does:
++ *  - enables the device's memory decode (PCI_COMMAND_MEMORY; never bus mastering) and maps
++ *    one 4 KiB BAR0 window;
++ *  - selects backplane windows through the BAR0 window register (config offset 0x80), the
++ *    same mechanism brcmfmac's chip attach uses: ChipCommon (0x18000000), then the EROM page
++ *    named by ChipCommon's eromptr, then ChipCommon again;
++ *  - reads ChipCommon chipid, eromptr, capabilities, otplayout and sromcontrol, and the first
++ *    EROM component (ChipCommon's own id/revision, at most eight descriptor words);
++ *  - restores the BAR0 window register to its original value on every exit path, checks it
++ *    read back, and undoes the device enable.
++ *
++ * What it does not do: no write other than the BAR0 window register, no OTP/SPROM selector
++ * write, no read of the sromotp shadow (ChipCommon +0x800..), no OTP status/control access,
++ * no firmware, no DMA, no bus mastering, no MSI, no radio activity, no brcmfmac. An unknown
++ * chip or ChipCommon revision stops before any OTP-related register is read.
++ *
++ * Source evidence for the register map and the path table: research/j81-bcm4350-otp-source-audit.md
++ * and the pinned brcmfmac chip.c/chipcommon.h (chipid layout, eromptr, component descriptors).
++ */
++#include <linux/io.h>
++#include <linux/module.h>
++#include <linux/pci.h>
++
++#define BCM_PROBE_PREFIX	"t7000-bcm-probe: "
++
++#define BCM_BAR0_WINDOW		0x80		/* PCI config offset (brcmfmac BRCMF_PCIE_BAR0_WINDOW) */
++#define BCM_WINDOW_SIZE		0x1000		/* BRCMF_PCIE_BAR0_REG_SIZE */
++#define BCM_WINDOW_MASK		(~(u32)(BCM_WINDOW_SIZE - 1))
++
++#define BCM_ENUM_BASE		0x18000000u	/* SI_ENUM_BASE_DEFAULT: ChipCommon */
++#define BCM_ENUM_END		0x19000000u	/* enumeration space is 16 MiB */
++
++/* ChipCommon register offsets (struct chipcregs). The shadow at 0x800 is deliberately absent. */
++#define BCM_CC_CHIPID		0x000
++#define BCM_CC_CAPABILITIES	0x004
++#define BCM_CC_OTPLAYOUT	0x01c
++#define BCM_CC_SROMCONTROL	0x190
++#define BCM_CC_EROMPTR		0x0fc
++
++#define BCM_CID_ID_MASK		0x0000ffff
++#define BCM_CID_REV_MASK	0x000f0000
++#define BCM_CID_REV_SHIFT	16
++#define BCM_CID_PKG_MASK	0x00f00000
++#define BCM_CID_PKG_SHIFT	20
++
++#define BCM_CHIP_ID_4350	0x4350
++#define BCM_CORE_ID_CHIPCOMMON	0x800
++
++/* EROM component descriptors (brcmfmac chip.c DMP_*). */
++#define BCM_DMP_TYPE_MASK	0x0000000f
++#define BCM_DMP_COMPONENT	0x00000001
++#define BCM_DMP_PARTNUM_MASK	0x000fff00
++#define BCM_DMP_PARTNUM_SHIFT	8
++#define BCM_DMP_REV_MASK	0xff000000
++#define BCM_DMP_REV_SHIFT	24
++#define BCM_EROM_MAX_WORDS	8
++
++/* Fields interpreted only to report (Android DHD sbchipc.h; see the source audit). */
++#define BCM_CAP_OTPSIZE_MASK	0x00380000
++#define BCM_CAP_OTPSIZE_SHIFT	19
++#define BCM_OTPL_WRAP_MASK	0x00070000
++#define BCM_OTPL_WRAP_SHIFT	16
++#define BCM_OTPL_WRAP_40NM	1
++#define BCM_SRC_PRESENT		0x01
++#define BCM_SRC_SIZE_MASK	0x06
++#define BCM_SRC_SIZE_SHIFT	1
++#define BCM_SRC_OTPSEL		0x10
++#define BCM_SRC_OTPPRESENT	0x20
++
++/* ChipCommon revisions the published BCM4350 diagnostic accepts and where the paths split. */
++#define BCM_CC_REV_MIN		44
++#define BCM_CC_REV_GCI_FIRST	49
++#define BCM_CC_REV_GCI_EXCEPT	51
++
++enum bcm_nvm_path {
++	BCM_PATH_STOP,		/* unsupported: do not guess a mapping */
++	BCM_PATH_CHIPCOMMON,	/* ChipCommon shadow window (at most 512 words) */
++	BCM_PATH_GCI,		/* newer GCI shadow: needs its own review, not covered here */
++};
++
++struct bcm_meta {
++	u32 chipid, eromptr, capabilities, otplayout, sromcontrol;
++	u32 erom_cia, erom_cib;
++	bool have_chipid, have_erom, have_regs;
++};
++
++/* Pure: which mapping path the observed values select, and why not when none. */
++static enum bcm_nvm_path bcm_classify(const struct bcm_meta *m, const char **why)
++{
++	u32 cc_id = (m->erom_cia & BCM_DMP_PARTNUM_MASK) >> BCM_DMP_PARTNUM_SHIFT;
++	u32 cc_rev = (m->erom_cib & BCM_DMP_REV_MASK) >> BCM_DMP_REV_SHIFT;
++
++	*why = "";
++	if (!m->have_chipid || (m->chipid & BCM_CID_ID_MASK) != BCM_CHIP_ID_4350) {
++		*why = "chip is not a BCM4350";
++		return BCM_PATH_STOP;
++	}
++	if (!m->have_erom || cc_id != BCM_CORE_ID_CHIPCOMMON) {
++		*why = "first EROM component is not ChipCommon";
++		return BCM_PATH_STOP;
++	}
++	if (cc_rev < BCM_CC_REV_MIN) {
++		*why = "ChipCommon revision below the published reader's minimum";
++		return BCM_PATH_STOP;
++	}
++	if (!m->have_regs) {
++		*why = "OTP metadata registers not read";
++		return BCM_PATH_STOP;
++	}
++	if (((m->otplayout & BCM_OTPL_WRAP_MASK) >> BCM_OTPL_WRAP_SHIFT) != BCM_OTPL_WRAP_40NM) {
++		*why = "OTP wrapper is not the documented 40 nm type";
++		return BCM_PATH_STOP;
++	}
++	if (cc_rev >= BCM_CC_REV_GCI_FIRST && cc_rev != BCM_CC_REV_GCI_EXCEPT)
++		return BCM_PATH_GCI;
++	return BCM_PATH_CHIPCOMMON;
++}
++
++static const char *bcm_path_name(enum bcm_nvm_path path)
++{
++	switch (path) {
++	case BCM_PATH_CHIPCOMMON:
++		return "chipcommon";
++	case BCM_PATH_GCI:
++		return "gci";
++	default:
++		return "STOP";
++	}
++}
++
++/* Select a backplane window and verify the device took it. */
++static int bcm_select_window(struct pci_dev *pdev, u32 backplane)
++{
++	u32 want = backplane & BCM_WINDOW_MASK, got = 0;
++
++	if (pci_write_config_dword(pdev, BCM_BAR0_WINDOW, want) ||
++	    pci_read_config_dword(pdev, BCM_BAR0_WINDOW, &got) || got != want) {
++		dev_err(&pdev->dev, BCM_PROBE_PREFIX "window 0x%08x not accepted (read 0x%08x)\n", want, got);
++		return -EIO;
++	}
++	return 0;
++}
++
++static int bcm_read_erom_component(struct pci_dev *pdev, void __iomem *bar, u32 eromptr, struct bcm_meta *m)
++{
++	u32 off = eromptr & (BCM_WINDOW_SIZE - 1), val;
++	int i, ret;
++
++	if ((eromptr & 3) || eromptr < BCM_ENUM_BASE || eromptr >= BCM_ENUM_END) {
++		dev_err(&pdev->dev, BCM_PROBE_PREFIX "eromptr 0x%08x outside the enumeration space\n", eromptr);
++		return -ERANGE;
++	}
++	ret = bcm_select_window(pdev, eromptr);
++	if (ret)
++		return ret;
++
++	/* The first component descriptor is ChipCommon's; bounded scan, never past the page. */
++	for (i = 0; i < BCM_EROM_MAX_WORDS && off + 8 <= BCM_WINDOW_SIZE; i++, off += 4) {
++		val = ioread32(bar + off);
++		if (val == 0xffffffff)
++			return -ENODEV;
++		if ((val & BCM_DMP_TYPE_MASK) == BCM_DMP_COMPONENT) {
++			m->erom_cia = val;
++			m->erom_cib = ioread32(bar + off + 4);
++			m->have_erom = true;
++			return 0;
++		}
++	}
++	return -ENOENT;
++}
++
++static void bcm_report(struct pci_dev *pdev, const struct bcm_meta *m)
++{
++	struct device *dev = &pdev->dev;
++	const char *why;
++	enum bcm_nvm_path path = bcm_classify(m, &why);
++	u32 srom = m->sromcontrol;
++
++	if (m->have_chipid)
++		dev_info(dev, BCM_PROBE_PREFIX "chipid=0x%08x chip=0x%04x chiprev=%u pkg=%u eromptr=0x%08x\n",
++			 m->chipid, m->chipid & BCM_CID_ID_MASK,
++			 (m->chipid & BCM_CID_REV_MASK) >> BCM_CID_REV_SHIFT,
++			 (m->chipid & BCM_CID_PKG_MASK) >> BCM_CID_PKG_SHIFT, m->eromptr);
++	if (m->have_erom)
++		dev_info(dev, BCM_PROBE_PREFIX "erom first component: id=0x%03x rev=%u (cia=0x%08x cib=0x%08x)\n",
++			 (m->erom_cia & BCM_DMP_PARTNUM_MASK) >> BCM_DMP_PARTNUM_SHIFT,
++			 (m->erom_cib & BCM_DMP_REV_MASK) >> BCM_DMP_REV_SHIFT, m->erom_cia, m->erom_cib);
++	if (m->have_regs)
++		dev_info(dev, BCM_PROBE_PREFIX
++			 "capabilities=0x%08x otpsize_enc=%u otplayout=0x%08x wrap=%u sromcontrol=0x%08x "
++			 "srom_present=%d srom_size_enc=%u otpsel=%d otp_present=%d\n",
++			 m->capabilities, (m->capabilities & BCM_CAP_OTPSIZE_MASK) >> BCM_CAP_OTPSIZE_SHIFT,
++			 m->otplayout, (m->otplayout & BCM_OTPL_WRAP_MASK) >> BCM_OTPL_WRAP_SHIFT, srom,
++			 !!(srom & BCM_SRC_PRESENT), (srom & BCM_SRC_SIZE_MASK) >> BCM_SRC_SIZE_SHIFT,
++			 !!(srom & BCM_SRC_OTPSEL), !!(srom & BCM_SRC_OTPPRESENT));
++	if (m->have_regs)
++		/* Both published predicates are reported; neither is chosen here. */
++		dev_info(dev, BCM_PROBE_PREFIX "predicates: android(otpsel&&otp_present)=%d newer(otp_present&&!srom_present)=%d\n",
++			 !!((srom & BCM_SRC_OTPSEL) && (srom & BCM_SRC_OTPPRESENT)),
++			 !!((srom & BCM_SRC_OTPPRESENT) && !(srom & BCM_SRC_PRESENT)));
++	dev_info(dev, BCM_PROBE_PREFIX "mapping path: %s%s%s\n", bcm_path_name(path), *why ? " - " : "", why);
++}
++
++static int bcm_probe_metadata(struct pci_dev *pdev, void __iomem *bar, struct bcm_meta *m)
++{
++	u32 cc_rev;
++	int ret;
++
++	ret = bcm_select_window(pdev, BCM_ENUM_BASE);
++	if (ret)
++		return ret;
++
++	m->chipid = ioread32(bar + BCM_CC_CHIPID);
++	m->eromptr = ioread32(bar + BCM_CC_EROMPTR);
++	if (m->chipid == 0xffffffff || m->eromptr == 0xffffffff)
++		return -ENODEV;
++	m->have_chipid = true;
++	if ((m->chipid & BCM_CID_ID_MASK) != BCM_CHIP_ID_4350)
++		return 0;			/* unknown chip: stop before anything else */
++
++	ret = bcm_read_erom_component(pdev, bar, m->eromptr, m);
++	if (ret)
++		return ret == -ENOENT || ret == -ERANGE ? 0 : ret;
++	cc_rev = (m->erom_cib & BCM_DMP_REV_MASK) >> BCM_DMP_REV_SHIFT;
++	if (((m->erom_cia & BCM_DMP_PARTNUM_MASK) >> BCM_DMP_PARTNUM_SHIFT) != BCM_CORE_ID_CHIPCOMMON ||
++	    cc_rev < BCM_CC_REV_MIN)
++		return 0;			/* unknown core/revision: no OTP-related register is read */
++
++	ret = bcm_select_window(pdev, BCM_ENUM_BASE);
++	if (ret)
++		return ret;
++	m->capabilities = ioread32(bar + BCM_CC_CAPABILITIES);
++	m->otplayout = ioread32(bar + BCM_CC_OTPLAYOUT);
++	m->sromcontrol = ioread32(bar + BCM_CC_SROMCONTROL);
++	m->have_regs = true;
++	return 0;
++}
++
++static int t7000_bcm_probe_probe(struct pci_dev *pdev, const struct pci_device_id *id)
++{
++	struct device *dev = &pdev->dev;
++	struct bcm_meta meta = { };
++	void __iomem *bar;
++	u32 saved = 0, now = 0;
++	bool enabled = false, mapped = false;
++	int ret;
++
++	if (pci_read_config_dword(pdev, BCM_BAR0_WINDOW, &saved)) {
++		dev_err(dev, BCM_PROBE_PREFIX "cannot read the BAR0 window register\n");
++		return -ENODEV;
++	}
++
++	ret = pci_enable_device_mem(pdev);	/* memory decode only; never pci_set_master() */
++	if (ret) {
++		dev_err(dev, BCM_PROBE_PREFIX "enable failed: %d\n", ret);
++		return -ENODEV;
++	}
++	enabled = true;
++	ret = pci_request_region(pdev, 0, "t7000-bcm-probe");
++	if (ret) {
++		dev_err(dev, BCM_PROBE_PREFIX "BAR0 busy: %d\n", ret);
++		goto out;
++	}
++	mapped = true;
++	bar = pci_iomap_range(pdev, 0, 0, BCM_WINDOW_SIZE);
++	if (!bar) {
++		dev_err(dev, BCM_PROBE_PREFIX "BAR0 map failed\n");
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	dev_info(dev, BCM_PROBE_PREFIX "saved BAR0 window=0x%08x\n", saved);
++	ret = bcm_probe_metadata(pdev, bar, &meta);
++	bcm_report(pdev, &meta);
++	if (ret)
++		dev_err(dev, BCM_PROBE_PREFIX "STOP: access error %d (see above for what was read)\n", ret);
++	pci_iounmap(pdev, bar);
++
++out:
++	/* Every exit: put the window back and prove it, then undo the enable. */
++	if (mapped || enabled) {
++		pci_write_config_dword(pdev, BCM_BAR0_WINDOW, saved);
++		pci_read_config_dword(pdev, BCM_BAR0_WINDOW, &now);
++		dev_info(dev, BCM_PROBE_PREFIX "BAR0 window restore %s (saved 0x%08x, now 0x%08x)\n",
++			 now == saved ? "PASS" : "FAIL", saved, now);
++	}
++	if (mapped)
++		pci_release_region(pdev, 0);
++	if (enabled)
++		pci_disable_device(pdev);
++	return -ENODEV;
++}
++
++static const struct pci_device_id t7000_bcm_probe_ids[] = {
++	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x43a3) },
++	{ }
++};
++MODULE_DEVICE_TABLE(pci, t7000_bcm_probe_ids);
++
++static struct pci_driver t7000_bcm_probe_driver = {
++	.name		= "t7000-bcm-probe",
++	.id_table	= t7000_bcm_probe_ids,
++	.probe		= t7000_bcm_probe_probe,
++};
++module_pci_driver(t7000_bcm_probe_driver);
++
++MODULE_DESCRIPTION("Apple T7000 PCIe BCM4350 metadata observation probe (test kernels only)");
++MODULE_LICENSE("GPL");

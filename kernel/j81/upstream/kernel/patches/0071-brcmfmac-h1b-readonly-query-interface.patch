@@ -1,0 +1,296 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -19,6 +19,8 @@
+ #include <linux/unaligned.h>
+ #include <linux/iommu.h>
+ #include <linux/irq.h>
++#include <linux/debugfs.h>
++#include <linux/mutex.h>
+ 
+ #include <soc.h>
+ #include <chipcommon.h>
+@@ -1071,6 +1073,32 @@
+ 		 "outen 0x%08x control 0x%08x reg 0xc40 0x%08x reg 0xe00 0x%08x\n", when, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]);
+ }
+ 
++/*
++ * Patch 0071: raw words of the three host/firmware shared regions (shared structure, ring info, common-ring memory
++ * table). Firmware and host configuration only (no calibration, no firmware code); read-only TCM reads.
++ */
++static void h1b_dump_region(struct brcmf_pciedev_info *devinfo, const char *what, u32 addr, u32 bytes)
++{
++	u32 buf[64];
++	u32 i, n = min_t(u32, bytes / 4, ARRAY_SIZE(buf));
++
++	for (i = 0; i < n; i++)
++		buf[i] = brcmf_pcie_read_tcm32(devinfo, addr + i * 4);
++	dev_info(&devinfo->pdev->dev, H1B_PREFIX "%s @ tcm 0x%08x (%u bytes):\n", what, addr, n * 4);
++	print_hex_dump(KERN_INFO, H1B_PREFIX, DUMP_PREFIX_OFFSET, 16, 4, buf, n * 4, false);
++}
++
++static void h1b_dump_shared_regions(struct brcmf_pciedev_info *devinfo)
++{
++	u32 ring_info = devinfo->shared.ring_info_addr;
++
++	h1b_dump_region(devinfo, "shared structure", devinfo->shared.tcm_base_address, 0x68);
++	if (!ring_info)
++		return;
++	h1b_dump_region(devinfo, "ring info", ring_info, 0x40);
++	h1b_dump_region(devinfo, "common ring memory", brcmf_pcie_read_tcm32(devinfo, ring_info), 0x50);
++}
++
+ /* Ring state as host and device see it, plus the control rings' first items (protocol headers). */
+ static void h1b_dump_rings(struct brcmf_pciedev_info *devinfo, const char *why)
+ {
+@@ -1082,6 +1110,7 @@
+ 	h1b_log_domain(devinfo);
+ 	h1b_log_msi(devinfo, "at snapshot");
+ 	h1b_log_chipcommon_gpio(devinfo, "at snapshot");
++	h1b_dump_shared_regions(devinfo);
+ 	{
+ 		u32 sbmbx = 0;
+ 
+@@ -2421,6 +2450,215 @@
+ #define BRCMF_PCIE_FW_CLM	2
+ #define BRCMF_PCIE_FW_TXCAP	3
+ 
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++/*
++ * Test only (patch 0071): read-only on-demand queries, so evidence does not need a dedicated build each time.
++ *
++ *   /sys/kernel/debug/brcmfmac-h1b/query   (root, write-only)  one command per write
++ *   /sys/kernel/debug/brcmfmac-h1b/result  (root, read-only)   text answer to the last command
++ *
++ * Commands (numbers accept 0x...):
++ *   tcm OFF LEN            firmware memory words (OFF, LEN multiples of 4, LEN <= 0x8000, inside the RAM)
++ *   core pcie2|cc OFF LEN  register words of the PCIe2 or ChipCommon core (OFF+LEN <= 0x1000)
++ *   shared                 shared structure, ring info and common-ring memory table
++ *   rings                  ring snapshot (same as the failure snapshot)
++ *   console                flush the firmware console to the kernel log
++ * Nothing writes a register or TCM. Core reads move the BAR0 window and are only accepted with
++ * brcmfmac.h1b_hold=1 (device left bound and quiescent after a setup failure), because a live driver could ring a
++ * doorbell while the window points elsewhere.
++ */
++#define H1B_Q_RESULT_MAX	(160 * 1024)
++#define H1B_Q_TCM_MAX		0x8000
++
++static unsigned int h1b_hold_mask;
++module_param_named(h1b_hold, h1b_hold_mask, uint, 0444);
++MODULE_PARM_DESC(h1b_hold, "J81 test: 1 keep the device bound (no driver release) after a setup failure");
++
++static DEFINE_MUTEX(h1b_q_lock);
++static struct brcmf_pciedev_info *h1b_q_devinfo;
++static struct dentry *h1b_q_dir;
++static char *h1b_q_buf;
++static size_t h1b_q_len;
++
++static void h1b_q_printf(const char *fmt, ...)
++{
++	va_list ap;
++	int n;
++
++	if (!h1b_q_buf || h1b_q_len >= H1B_Q_RESULT_MAX)
++		return;
++	va_start(ap, fmt);
++	n = vscnprintf(h1b_q_buf + h1b_q_len, H1B_Q_RESULT_MAX - h1b_q_len, fmt, ap);
++	va_end(ap);
++	h1b_q_len += n;
++}
++
++static void h1b_q_words(const char *tag, u32 base, const u32 *w, u32 n)
++{
++	u32 i, j;
++
++	for (i = 0; i < n; i += 4) {
++		h1b_q_printf("%s %08x:", tag, base + i * 4);
++		for (j = i; j < min(i + 4, n); j++)
++			h1b_q_printf(" %08x", w[j]);
++		h1b_q_printf("\n");
++	}
++}
++
++static void h1b_q_tcm(struct brcmf_pciedev_info *devinfo, const char *tag, u32 off, u32 len)
++{
++	u32 i, w[4];
++
++	for (i = 0; i < len / 4; i += 4) {
++		u32 k, n = min_t(u32, 4, len / 4 - i);
++
++		for (k = 0; k < n; k++)
++			w[k] = brcmf_pcie_read_tcm32(devinfo, off + (i + k) * 4);
++		h1b_q_words(tag, off + i * 4, w, n);
++	}
++}
++
++static void h1b_q_core(struct brcmf_pciedev_info *devinfo, u16 coreid, const char *tag, u32 off, u32 len)
++{
++	u32 i, w[4];
++
++	if (devinfo->irq_allocated)
++		disable_irq(devinfo->pdev->irq);
++	brcmf_pcie_select_core(devinfo, coreid);
++	for (i = 0; i < len / 4; i += 4) {
++		u32 k, n = min_t(u32, 4, len / 4 - i);
++
++		for (k = 0; k < n; k++)
++			w[k] = brcmf_pcie_read_reg32(devinfo, off + (i + k) * 4);
++		h1b_q_words(tag, off + i * 4, w, n);
++	}
++	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
++	if (devinfo->irq_allocated)
++		enable_irq(devinfo->pdev->irq);
++}
++
++static void h1b_q_run(struct brcmf_pciedev_info *devinfo, const char *cmd)
++{
++	char which[8];
++	u32 off, len;
++	u32 ring_info;
++
++	if (sscanf(cmd, "tcm %i %i", &off, &len) == 2) {
++		if ((off | len) & 3 || !len || len > H1B_Q_TCM_MAX || !devinfo->ci ||
++		    off > devinfo->ci->ramsize || len > devinfo->ci->ramsize - off) {
++			h1b_q_printf("error: tcm needs OFF,LEN multiples of 4, 0 < LEN <= 0x%x, inside the RAM\n", H1B_Q_TCM_MAX);
++			return;
++		}
++		h1b_q_tcm(devinfo, "tcm", off, len);
++	} else if (sscanf(cmd, "core %7s %i %i", which, &off, &len) == 3) {
++		u16 id;
++
++		if (!h1b_hold_mask) {
++			h1b_q_printf("error: core reads need brcmfmac.h1b_hold=1\n");
++			return;
++		}
++		if (!strcmp(which, "pcie2"))
++			id = BCMA_CORE_PCIE2;
++		else if (!strcmp(which, "cc"))
++			id = BCMA_CORE_CHIPCOMMON;
++		else {
++			h1b_q_printf("error: core must be pcie2 or cc\n");
++			return;
++		}
++		if ((off | len) & 3 || !len || off >= 0x1000 || len > 0x1000 - off || !devinfo->ci) {
++			h1b_q_printf("error: core needs OFF,LEN multiples of 4 and OFF+LEN <= 0x1000\n");
++			return;
++		}
++		h1b_q_core(devinfo, id, which, off, len);
++	} else if (!strncmp(cmd, "shared", 6)) {
++		ring_info = devinfo->shared.ring_info_addr;
++		h1b_q_printf("version %u flags 0x%08x ring_info 0x%08x\n", devinfo->shared.version, devinfo->shared.flags, ring_info);
++		h1b_q_tcm(devinfo, "shared", devinfo->shared.tcm_base_address, 0x68);
++		if (ring_info) {
++			h1b_q_tcm(devinfo, "ringinfo", ring_info, 0x40);
++			h1b_q_tcm(devinfo, "ringmem", brcmf_pcie_read_tcm32(devinfo, ring_info), 0x50);
++		}
++	} else if (!strncmp(cmd, "rings", 5)) {
++		h1b_dump_rings(devinfo, "query");
++		h1b_q_printf("ring snapshot written to the kernel log\n");
++	} else if (!strncmp(cmd, "console", 7)) {
++		brcmf_pcie_bus_console_read(devinfo, true);
++		h1b_q_printf("console flushed to the kernel log\n");
++	} else {
++		h1b_q_printf("error: unknown command (tcm|core|shared|rings|console)\n");
++	}
++}
++
++static ssize_t h1b_q_write(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos)
++{
++	char cmd[96];
++	size_t n = min(count, sizeof(cmd) - 1);
++
++	if (copy_from_user(cmd, ubuf, n))
++		return -EFAULT;
++	cmd[n] = 0;
++	mutex_lock(&h1b_q_lock);
++	h1b_q_len = 0;
++	if (h1b_q_buf) {
++		h1b_q_buf[0] = 0;
++		if (h1b_q_devinfo)
++			h1b_q_run(h1b_q_devinfo, cmd);
++		else
++			h1b_q_printf("error: no device\n");
++	}
++	mutex_unlock(&h1b_q_lock);
++	return count;
++}
++
++static ssize_t h1b_q_read(struct file *file, char __user *ubuf, size_t count, loff_t *ppos)
++{
++	ssize_t ret;
++
++	mutex_lock(&h1b_q_lock);
++	ret = h1b_q_buf ? simple_read_from_buffer(ubuf, count, ppos, h1b_q_buf, h1b_q_len) : 0;
++	mutex_unlock(&h1b_q_lock);
++	return ret;
++}
++
++static const struct file_operations h1b_q_write_fops = {
++	.owner = THIS_MODULE, .open = simple_open, .write = h1b_q_write, .llseek = noop_llseek,
++};
++
++static const struct file_operations h1b_q_read_fops = {
++	.owner = THIS_MODULE, .open = simple_open, .read = h1b_q_read, .llseek = default_llseek,
++};
++
++static void h1b_query_init(struct brcmf_pciedev_info *devinfo)
++{
++	mutex_lock(&h1b_q_lock);
++	if (!h1b_q_dir) {
++		h1b_q_buf = kzalloc(H1B_Q_RESULT_MAX, GFP_KERNEL);
++		h1b_q_dir = debugfs_create_dir("brcmfmac-h1b", NULL);
++		debugfs_create_file("query", 0200, h1b_q_dir, NULL, &h1b_q_write_fops);
++		debugfs_create_file("result", 0400, h1b_q_dir, NULL, &h1b_q_read_fops);
++	}
++	h1b_q_devinfo = devinfo;
++	mutex_unlock(&h1b_q_lock);
++}
++
++static void h1b_query_exit(struct brcmf_pciedev_info *devinfo)
++{
++	mutex_lock(&h1b_q_lock);
++	if (h1b_q_devinfo == devinfo)
++		h1b_q_devinfo = NULL;
++	mutex_unlock(&h1b_q_lock);
++}
++
++static bool h1b_hold_device(void)
++{
++	return h1b_hold_mask;
++}
++#else
++static inline void h1b_query_init(struct brcmf_pciedev_info *devinfo) { }
++static inline void h1b_query_exit(struct brcmf_pciedev_info *devinfo) { }
++static inline bool h1b_hold_device(void) { return false; }
++#endif
++
+ static void brcmf_pcie_setup(struct device *dev, int ret,
+ 			     struct brcmf_fw_request *fwreq)
+ {
+@@ -2435,6 +2673,7 @@
+ 	bus = dev_get_drvdata(dev);
+ 	pcie_bus_dev = bus->bus_priv.pcie;
+ 	devinfo = pcie_bus_dev->devinfo;
++	h1b_query_init(devinfo);
+ 
+ 	/* check firmware loading result */
+ 	if (ret)
+@@ -2516,6 +2755,10 @@
+ 	brcmf_err(bus, "Dongle setup failed\n");
+ 	brcmf_pcie_bus_console_read(devinfo, true);
+ 	brcmf_fw_crashed(dev);
++	if (h1b_hold_device()) {
++		dev_info(dev, "t7000-h1b: device held for queries (h1b_hold), driver not released\n");
++		return;
++	}
+ 	device_release_driver(dev);
+ }
+ 
+@@ -2877,6 +3120,7 @@
+ 		return;
+ 
+ 	devinfo = bus->bus_priv.pcie->devinfo;
++	h1b_query_exit(devinfo);
+ 	brcmf_pcie_bus_console_read(devinfo, false);
+ 	brcmf_pcie_fwcon_timer(devinfo, false);
+ 

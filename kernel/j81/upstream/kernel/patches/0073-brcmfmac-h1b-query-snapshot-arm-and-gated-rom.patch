@@ -1,0 +1,202 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -2487,6 +2487,9 @@
+  *   shared                 shared structure, ring info and common-ring memory table
+  *   rings                  ring snapshot (same as the failure snapshot)
+  *   console                flush the firmware console to the kernel log
++ *   snap / diff            snapshot the whole RAM, then list the words that changed since (is the firmware running?)
++ *   arm                    ARM CR4 / PCIe2 / ChipCommon core info and up state (needs h1b_hold)
++ *   unlock rom, rom OFF LEN  gated reads below the RAM base (see patch 0073)
+  * Nothing writes a register or TCM. Core reads move the BAR0 window and are only accepted with
+  * brcmfmac.h1b_hold=1 (device left bound and quiescent after a setup failure), because a live driver could ring a
+  * doorbell while the window points elsewhere.
+@@ -2574,6 +2577,105 @@
+ 	return (off >= 0x58 && off <= 0x6c) || off == 0xc40 || off == 0xe00;
+ }
+ 
++/*
++ * Patch 0073: whole-RAM snapshot and diff (is the firmware's RAM changing, i.e. is the ARM running?), ARM/PCIe2/ChipCommon
++ * core-up state, and gated ROM reads. ROM reads (addresses below the RAM base through the same BAR2 window) are refused
++ * until "unlock rom" has been issued in this boot, need brcmfmac.h1b_hold=1, are limited to 0x1000 bytes per command and
++ * to the BAR2 size, and are logged before they are issued. An unmapped or unimplemented read may fault the bus (a PCIe2
++ * register sweep in run 12 rebooted the iPad), which is why the unlock is a separate, deliberate step.
++ */
++#define H1B_Q_ROM_MAX		0x1000
++#define H1B_Q_DIFF_LINES	400
++
++static u32 *h1b_snap;
++static u32 h1b_snap_base;
++static u32 h1b_snap_bytes;
++static bool h1b_rom_unlocked;
++
++static u32 *h1b_q_read_ram(struct brcmf_pciedev_info *devinfo, u32 *base, u32 *bytes)
++{
++	u32 *buf;
++
++	*base = devinfo->ci->rambase;
++	*bytes = devinfo->ci->ramsize & ~3u;
++	buf = kvmalloc(*bytes, GFP_KERNEL);
++	if (buf)
++		brcmf_pcie_copy_dev_tomem(devinfo, *base, buf, *bytes);
++	return buf;
++}
++
++static void h1b_q_snap(struct brcmf_pciedev_info *devinfo)
++{
++	u32 base, bytes;
++	u32 *buf = h1b_q_read_ram(devinfo, &base, &bytes);
++
++	if (!buf) {
++		h1b_q_printf("error: out of memory\n");
++		return;
++	}
++	kvfree(h1b_snap);
++	h1b_snap = buf;
++	h1b_snap_base = base;
++	h1b_snap_bytes = bytes;
++	h1b_q_printf("snapshot of RAM 0x%x..0x%x taken\n", base, base + bytes);
++}
++
++static void h1b_q_diff(struct brcmf_pciedev_info *devinfo)
++{
++	u32 base, bytes, i, changed = 0, shown = 0;
++	u32 *buf;
++
++	if (!h1b_snap) {
++		h1b_q_printf("error: no snapshot (run snap first)\n");
++		return;
++	}
++	buf = h1b_q_read_ram(devinfo, &base, &bytes);
++	if (!buf) {
++		h1b_q_printf("error: out of memory\n");
++		return;
++	}
++	if (base != h1b_snap_base || bytes != h1b_snap_bytes) {
++		kvfree(buf);
++		h1b_q_printf("error: RAM geometry changed since the snapshot\n");
++		return;
++	}
++	for (i = 0; i < bytes / 4; i++) {
++		if (buf[i] == h1b_snap[i])
++			continue;
++		changed++;
++		if (shown < H1B_Q_DIFF_LINES) {
++			h1b_q_printf("diff %08x: %08x -> %08x\n", base + i * 4, h1b_snap[i], buf[i]);
++			shown++;
++		}
++	}
++	h1b_q_printf("changed words: %u of %u (%u shown)\n", changed, bytes / 4, shown);
++	kvfree(h1b_snap);
++	h1b_snap = buf;
++}
++
++static void h1b_q_arm(struct brcmf_pciedev_info *devinfo)
++{
++	static const struct { u16 id; const char *name; } cores[] = {
++		{ BCMA_CORE_ARM_CR4, "arm_cr4" }, { BCMA_CORE_PCIE2, "pcie2" }, { BCMA_CORE_CHIPCOMMON, "chipcommon" },
++	};
++	int i;
++
++	if (devinfo->irq_allocated)
++		disable_irq(devinfo->pdev->irq);
++	for (i = 0; i < ARRAY_SIZE(cores); i++) {
++		struct brcmf_core *core = brcmf_chip_get_core(devinfo->ci, cores[i].id);
++
++		if (core)
++			h1b_q_printf("%s: rev %u base 0x%08x up %d\n", cores[i].name, core->rev, core->base,
++				     brcmf_chip_iscoreup(core));
++		else
++			h1b_q_printf("%s: absent\n", cores[i].name);
++	}
++	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
++	if (devinfo->irq_allocated)
++		enable_irq(devinfo->pdev->irq);
++}
++
+ static void h1b_q_run(struct brcmf_pciedev_info *devinfo, const char *cmd)
+ {
+ 	char which[8];
+@@ -2581,9 +2683,11 @@
+ 	u32 ring_info;
+ 
+ 	if (sscanf(cmd, "tcm %i %i", &off, &len) == 2) {
+-		if ((off | len) & 3 || !len || len > H1B_Q_TCM_MAX || !devinfo->ci ||
+-		    off > devinfo->ci->ramsize || len > devinfo->ci->ramsize - off) {
+-			h1b_q_printf("error: tcm needs OFF,LEN multiples of 4, 0 < LEN <= 0x%x, inside the RAM\n", H1B_Q_TCM_MAX);
++		if ((off | len) & 3 || !len || len > H1B_Q_TCM_MAX || !devinfo->ci || off < devinfo->ci->rambase ||
++		    off - devinfo->ci->rambase > devinfo->ci->ramsize || len > devinfo->ci->ramsize - (off - devinfo->ci->rambase)) {
++			h1b_q_printf("error: tcm needs absolute ARM addresses inside the RAM (0x%x..0x%x), OFF,LEN multiples of 4, 0 < LEN <= 0x%x\n",
++				     devinfo->ci ? devinfo->ci->rambase : 0, devinfo->ci ? devinfo->ci->rambase + devinfo->ci->ramsize : 0,
++				     H1B_Q_TCM_MAX);
+ 			return;
+ 		}
+ 		h1b_q_tcm(devinfo, "tcm", off, len);
+@@ -2614,6 +2718,49 @@
+ 			}
+ 		}
+ 		h1b_q_core(devinfo, id, which, off, len);
++	} else if (!strcmp(cmd, "snap")) {
++		if (!devinfo->ci) {
++			h1b_q_printf("error: no chip\n");
++			return;
++		}
++		h1b_q_snap(devinfo);
++	} else if (!strcmp(cmd, "diff")) {
++		if (!devinfo->ci) {
++			h1b_q_printf("error: no chip\n");
++			return;
++		}
++		h1b_q_diff(devinfo);
++	} else if (!strcmp(cmd, "arm")) {
++		if (!h1b_hold_mask || !devinfo->ci) {
++			h1b_q_printf("error: arm needs brcmfmac.h1b_hold=1\n");
++			return;
++		}
++		h1b_q_arm(devinfo);
++	} else if (!strcmp(cmd, "unlock rom")) {
++		if (!h1b_hold_mask || !devinfo->ci) {
++			h1b_q_printf("error: rom reads need brcmfmac.h1b_hold=1\n");
++			return;
++		}
++		h1b_rom_unlocked = true;
++		dev_warn(&devinfo->pdev->dev, "t7000-h1b: ROM reads unlocked (BAR2 0x%llx bytes, RAM base 0x%x)\n",
++			 (unsigned long long)pci_resource_len(devinfo->pdev, 2), devinfo->ci->rambase);
++		h1b_q_printf("rom reads unlocked: BAR2 0x%llx bytes, RAM base 0x%x, max 0x%x bytes per read, offsets below the RAM base only\n",
++			     (unsigned long long)pci_resource_len(devinfo->pdev, 2), devinfo->ci->rambase, H1B_Q_ROM_MAX);
++	} else if (sscanf(cmd, "rom %i %i", &off, &len) == 2) {
++		u64 bar2 = pci_resource_len(devinfo->pdev, 2);
++
++		if (!h1b_rom_unlocked) {
++			h1b_q_printf("error: ROM reads are locked (issue: unlock rom)\n");
++			return;
++		}
++		if ((off | len) & 3 || !len || len > H1B_Q_ROM_MAX || !devinfo->ci || off >= devinfo->ci->rambase ||
++		    len > devinfo->ci->rambase - off || (u64)off + len > bar2) {
++			h1b_q_printf("error: rom needs OFF,LEN multiples of 4, 0 < LEN <= 0x%x, OFF+LEN <= RAM base 0x%x and <= BAR2 size\n",
++				     H1B_Q_ROM_MAX, devinfo->ci ? devinfo->ci->rambase : 0);
++			return;
++		}
++		dev_warn(&devinfo->pdev->dev, "t7000-h1b: ROM read 0x%x len 0x%x\n", off, len);
++		h1b_q_tcm(devinfo, "rom", off, len);
+ 	} else if (!strncmp(cmd, "shared", 6)) {
+ 		ring_info = devinfo->shared.ring_info_addr;
+ 		h1b_q_printf("version %u flags 0x%08x ring_info 0x%08x\n", devinfo->shared.version, devinfo->shared.flags, ring_info);
+@@ -2629,7 +2776,7 @@
+ 		brcmf_pcie_bus_console_read(devinfo, true);
+ 		h1b_q_printf("console flushed to the kernel log\n");
+ 	} else {
+-		h1b_q_printf("error: unknown command (tcm|core|shared|rings|console)\n");
++		h1b_q_printf("error: unknown command (tcm|core|snap|diff|arm|unlock rom|rom|shared|rings|console)\n");
+ 	}
+ }
+ 
+@@ -2646,7 +2793,7 @@
+ 	if (h1b_q_buf) {
+ 		h1b_q_buf[0] = 0;
+ 		if (h1b_q_devinfo)
+-			h1b_q_run(h1b_q_devinfo, cmd);
++			h1b_q_run(h1b_q_devinfo, strim(cmd));
+ 		else
+ 			h1b_q_printf("error: no device\n");
+ 	}

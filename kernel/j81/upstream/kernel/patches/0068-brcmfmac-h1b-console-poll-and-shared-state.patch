@@ -1,0 +1,96 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -1055,6 +1055,19 @@
+ 		 atomic_read(&h1b_isr_count), brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->mailboxint));
+ 	h1b_log_domain(devinfo);
+ 	h1b_log_msi(devinfo, "at snapshot");
++	{
++		u32 sbmbx = 0;
++
++		pci_read_config_dword(devinfo->pdev, BRCMF_PCIE_REG_SBMBX, &sbmbx);
++		dev_info(dev, H1B_PREFIX "shared: version %u flags 0x%08x host-to-dev mb word 0x%x dev-to-host mb word 0x%x; "
++			 "mailbox mask 0x%x h2d_mailbox_0 0x%x h2d_mailbox_1 0x%x config SBMBX 0x%x\n",
++			 devinfo->shared.version, devinfo->shared.flags,
++			 brcmf_pcie_read_tcm32(devinfo, devinfo->shared.htod_mb_data_addr),
++			 brcmf_pcie_read_tcm32(devinfo, devinfo->shared.dtoh_mb_data_addr),
++			 brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->mailboxmask),
++			 brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->h2d_mailbox_0),
++			 brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->h2d_mailbox_1), sbmbx);
++	}
+ 	for (i = 0; i < BRCMF_NROF_COMMON_MSGRINGS; i++) {
+ 		struct brcmf_pcie_ringbuf *ring = devinfo->shared.commonrings[i];
+ 
+@@ -1074,13 +1087,56 @@
+ 	}
+ 	if (devinfo->shared.scratch)
+ 		dev_info(dev, H1B_PREFIX "d2h scratch (device-written via DMA): %*phN\n", 8, devinfo->shared.scratch);
++	/* The firmware's own console (text it printed, not calibration): flush what it wrote since the last read. */
++	brcmf_pcie_bus_console_read(devinfo, true);
+ }
++
++/*
++ * Poll the firmware console every 100 ms for the first 3 s after the interrupt is set up (read-only TCM reads),
++ * so the time series of what the firmware prints while the first control query is pending is visible even when no
++ * interrupt ever arrives (the console is otherwise only read from the interrupt handler).
++ */
++static struct timer_list h1b_console_timer;
++static struct brcmf_pciedev_info *h1b_poll_devinfo;
++static int h1b_poll_ticks;
++static bool h1b_poll_started;
++
++static void h1b_console_tick(struct timer_list *t)
++{
++	struct brcmf_pciedev_info *devinfo = h1b_poll_devinfo;
++
++	if (!devinfo || ++h1b_poll_ticks > 30)
++		return;
++	if (devinfo->state == BRCMFMAC_PCIE_STATE_UP)
++		brcmf_pcie_bus_console_read(devinfo, true);
++	mod_timer(&h1b_console_timer, jiffies + msecs_to_jiffies(100));
++}
++
++static void h1b_console_poll_start(struct brcmf_pciedev_info *devinfo)
++{
++	h1b_poll_devinfo = devinfo;
++	h1b_poll_ticks = 0;
++	h1b_poll_started = true;
++	timer_setup(&h1b_console_timer, h1b_console_tick, 0);
++	mod_timer(&h1b_console_timer, jiffies + msecs_to_jiffies(100));
++}
++
++static void h1b_console_poll_stop(void)
++{
++	if (!h1b_poll_started)
++		return;
++	timer_delete_sync(&h1b_console_timer);
++	h1b_poll_devinfo = NULL;
++	h1b_poll_started = false;
++}
+ #else
+ static inline void h1b_log_domain(struct brcmf_pciedev_info *devinfo) { }
+ static inline void h1b_log_dma(struct brcmf_pciedev_info *devinfo, const char *what, dma_addr_t iova, u32 size) { }
+ static inline void h1b_log_msi(struct brcmf_pciedev_info *devinfo, const char *when) { }
+ static inline void h1b_isr_note(struct brcmf_pciedev_info *devinfo, int irq, u32 status) { }
+ static inline void h1b_dump_rings(struct brcmf_pciedev_info *devinfo, const char *why) { }
++static inline void h1b_console_poll_start(struct brcmf_pciedev_info *devinfo) { }
++static inline void h1b_console_poll_stop(void) { }
+ #endif
+ 
+ static irqreturn_t brcmf_pcie_isr_thread(int irq, void *arg)
+@@ -1131,6 +1187,7 @@
+ 	}
+ 	devinfo->irq_allocated = true;
+ 	h1b_log_msi(devinfo, "after request_irq");
++	h1b_console_poll_start(devinfo);
+ 	return 0;
+ }
+ 
+@@ -1142,6 +1199,7 @@
+ 	u32 status;
+ 	u32 count;
+ 
++	h1b_console_poll_stop();
+ 	if (!devinfo->irq_allocated)
+ 		return;
+ 

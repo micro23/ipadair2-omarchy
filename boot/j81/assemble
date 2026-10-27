@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""Reconstruct the firmware-free J81 RAM payload from explicit pinned inputs.
+
+This builds files only. It never opens USB, boots an iPad or selects firmware.
+"""
+from pathlib import Path
+import argparse
+import hashlib
+import shutil
+import subprocess
+import sys
+
+HERE = Path(__file__).resolve().parent
+
+
+def digest(path):
+    value = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            value.update(block)
+    return value.hexdigest()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("profile", choices=("radio-id", "wifi-base"))
+    parser.add_argument("--products", type=Path, required=True,
+                        help="Kernel producer's profile/products directory")
+    parser.add_argument("--debug-initrd", type=Path, required=True,
+                        help="Pinned SoMainline debug_initrd.img; never executed")
+    parser.add_argument("--pongo", type=Path, required=True)
+    parser.add_argument("--m1n1", type=Path, required=True)
+    parser.add_argument("--tools", type=Path, required=True,
+                        help="Unpacked toolchain usr/bin directory containing dtc/fdtget")
+    parser.add_argument("--output", type=Path, required=True,
+                        help="New or empty work directory outside the checkout")
+    args = parser.parse_args()
+    output = args.output.resolve()
+    checkout = HERE.parents[1]
+    if output == checkout or output.is_relative_to(checkout):
+        parser.error("Choose an output directory outside the source checkout.")
+    if output.exists() and (not output.is_dir() or any(output.iterdir())):
+        parser.error("The output directory must be new or empty.")
+    pins = [
+        (args.debug_initrd, "af3fc3c7c57c775095fea2df7930961c92f73ec95f64d4c7ef6cae9c02dee9c6"),
+        (args.pongo, "1e5543fd8e6dbd84c334b87d71aa473f4d347c2ba8a5e863b6e10f18461c7575"),
+        (args.m1n1, "2e377fb72a8555c944bf30e08f1604cc2b889678250df34ca2d61d0dda8fb0a1"),
+    ]
+    for path, wanted in pins:
+        if digest(path.resolve(strict=True)) != wanted:
+            parser.error("Pinned public input differs: " + path.name)
+    products = args.products.resolve(strict=True)
+    tools = args.tools.resolve(strict=True)
+    output.mkdir(parents=True, exist_ok=True)
+    work = output / "source"
+    shutil.copytree(HERE / "reference", work)
+    ramdisk = work / "ramdisk"
+    shutil.copy2(ramdisk / "init-base", ramdisk / "init")
+    subprocess.run([
+        sys.executable, "-B", str(ramdisk / "archive_support.py"),
+        str(args.debug_initrd.resolve()), "--output", str(ramdisk / "base-initramfs.gz"),
+    ], check=True)
+    if digest(ramdisk / "base-initramfs.gz") != "cf1c17b3a9403331511ebcdb01a6a6c96549b2e89dbd44372097c57362b291d3":
+        raise SystemExit("Reconstructed minimal userspace differs from the pinned base.")
+    pinned = output / "loaders"
+    pinned.mkdir()
+    shutil.copyfile(args.pongo, pinned / "Pongo.bin")
+    shutil.copyfile(args.m1n1, pinned / "m1n1.bin")
+    subprocess.run([
+        sys.executable, "-B", str(work / "assemble_payloads.py"), args.profile,
+        "--products", str(products), "--output", str(output / "payload"),
+        "--tools", str(tools), "--pinned", str(pinned),
+    ], check=True)
+    print("Firmware-free payload:", output / "payload/m1n1-linux.bin")
+    print("This command has not booted hardware or prepared a Wi-Fi connection.")
+
+
+if __name__ == "__main__":
+    main()

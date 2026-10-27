@@ -1,0 +1,106 @@
+diff --git a/drivers/pci/controller/pcie-apple-t7000.c b/drivers/pci/controller/pcie-apple-t7000.c
+--- a/drivers/pci/controller/pcie-apple-t7000.c
++++ b/drivers/pci/controller/pcie-apple-t7000.c
+@@ -2,8 +2,20 @@
+ /*
+  * Apple T7000-family PCIe -- enable-sequence + generic-enumeration +
+  * PERST + per-port link-start write + controller-tuning/DBI-override
+- * RMW (Stage 5C).
++ * RMW + read-only link-state probe (Stage 5D).
+  *
++ * Stage 5D adds no new writes on top of Stage 5C. It logs the direct
++ * port-controller window's link-status registers (+0x88/+0x8c, per
++ * Apple's own waitForLinkUpGated()), the three not-yet-implemented
++ * enableGated() tail offsets (+0x100/+0x104/+0x114, read-only until
++ * their callbacks are decompiled), and two DesignWare-PCIe DBI
++ * corroboration candidates (+0x728/+0x72c) through the ECAM-relative
++ * accessor -- at four points (t+0/10/100/1000ms) to distinguish a link
++ * that never leaves reset/detect from one that trains and fails. See
++ * research/t7000-pcie-stage5-handoff.md's "Stage 5D research
++ * correction and next experiment design" section for the full design
++ * rationale and decompile evidence.
++ *
+  * Stage 5A read a baseline of the seven offsets Apple's own recovered
+  * `apcie-config-tunables`/`dbi-overrides` records touch, confirming
+  * every offset is live and non-faulting. Stage 5B independently
+@@ -129,6 +141,55 @@
+ 	{ T7000_PCIE_TUNE_CONFIG_C, 0x00000001, 0x00000001 },
+ };
+ 
++/*
++ * Stage 5D read-only link-state probe. Apple's waitForLinkUpGated()
++ * polls the direct port-controller window at +0x88 (bit 6 = link up)
++ * and +0x8c (bit 0 polled, bit 5 = error/timeout) -- see
++ * research/t7000-pcie-stage5-handoff.md's "Stage 5D research correction
++ * and next experiment design" section. +0x100/+0x104/+0x114 are the
++ * three direct writes Apple's enableGated() tail performs immediately
++ * before marking the port enabled; not written here, only read, since
++ * their callbacks (FUN_ffffff8002befa14, FUN_ffffff8002befb10, the
++ * callback object cached at +0x100, controller vtable slot +0x570)
++ * are not yet decompiled.
++ */
++#define T7000_PCIE_LINK_STATUS_A	0x088
++#define T7000_PCIE_LINK_STATUS_B	0x08c
++#define T7000_PCIE_PORT_TAIL_A		0x100
++#define T7000_PCIE_PORT_TAIL_B		0x104
++#define T7000_PCIE_PORT_TAIL_C		0x114
++
++/*
++ * Secondary, independent corroboration candidates: pinned upstream
++ * DesignWare PCIe DBI offsets (drivers/pci/controller/dwc/pcie-
++ * designware.h) -- LTSSM state in bits 0:5 of +0x728 (L0 is 0x11),
++ * link-up bit 4 and training bit 29 of +0x72c. Read through the same
++ * ECAM-relative accessor already confirmed for dbi-overrides (no new
++ * access mechanism), using the same per-record selector/offset
++ * decomposition: for port 1, both resolve to ECAM+0x8728/ECAM+0x872c
++ * -- independently re-derived by hand, matching the handoff doc's own
++ * math exactly. Their relation to this Apple port's own view is
++ * unverified; read-only corroboration only.
++ */
++#define T7000_PCIE_DW_LTSSM_ECAM_OFFSET	0x8728
++#define T7000_PCIE_DW_LINKCTRL_ECAM_OFFSET	0x872c
++
++static void t7000_pcie_log_link_state(struct device *dev, void __iomem *ctrl,
++				       struct pci_config_window *cfg,
++				       const char *label)
++{
++	dev_info(dev,
++		 "t7000-pcie link-state-test: %s 0x088=0x%08x 0x08c=0x%08x 0x100=0x%08x 0x104=0x%08x 0x114=0x%08x ecam+0x8728=0x%08x ecam+0x872c=0x%08x\n",
++		 label,
++		 readl(ctrl + T7000_PCIE_LINK_STATUS_A),
++		 readl(ctrl + T7000_PCIE_LINK_STATUS_B),
++		 readl(ctrl + T7000_PCIE_PORT_TAIL_A),
++		 readl(ctrl + T7000_PCIE_PORT_TAIL_B),
++		 readl(ctrl + T7000_PCIE_PORT_TAIL_C),
++		 readl(cfg->win + T7000_PCIE_DW_LTSSM_ECAM_OFFSET),
++		 readl(cfg->win + T7000_PCIE_DW_LINKCTRL_ECAM_OFFSET));
++}
++
+ /* Board port 1 is J81's only populated port; this driver never touches
+  * ports 2-4.
+  */
+@@ -422,8 +483,16 @@
+ 	t7000_pcie_apply_dbi_overrides(dev, cfg);
+ 	t7000_pcie_apply_config_tunables(dev, ctrl);
+ 
+-	dev_info(dev, "t7000-pcie dbi-write-test: init complete, handing back to generic ECAM core for bus enumeration\n");
++	t7000_pcie_log_link_state(dev, ctrl, cfg, "t+0ms");
++	msleep(10);
++	t7000_pcie_log_link_state(dev, ctrl, cfg, "t+10ms");
++	msleep(90);
++	t7000_pcie_log_link_state(dev, ctrl, cfg, "t+100ms");
++	msleep(900);
++	t7000_pcie_log_link_state(dev, ctrl, cfg, "t+1000ms");
+ 
++	dev_info(dev, "t7000-pcie link-state-test: init complete, handing back to generic ECAM core for bus enumeration\n");
++
+ 	return 0;
+ }
+ 
+@@ -471,5 +540,5 @@
+ };
+ module_platform_driver(apple_t7000_pcie_driver);
+ 
+-MODULE_DESCRIPTION("Apple T7000 PCIe port-1 full recovered enable sequence plus dbi-overrides/apcie-config-tunables RMW (Stage 5C)");
++MODULE_DESCRIPTION("Apple T7000 PCIe port-1 full recovered enable sequence plus dbi-overrides/apcie-config-tunables RMW and read-only link-state probe (Stage 5D)");
+ MODULE_LICENSE("GPL");

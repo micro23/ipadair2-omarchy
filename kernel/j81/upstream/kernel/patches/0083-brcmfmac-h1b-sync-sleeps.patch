@@ -1,0 +1,81 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+@@ -34,6 +34,23 @@
+ static unsigned int h1b_feed = 7;
+ module_param_named(h1b_feed, h1b_feed, uint, 0444);
+ MODULE_PARM_DESC(h1b_feed, "J81 test: bit mask of buffers to feed at attach (1 data, 2 event, 4 ioctl response; default 7)");
++/*
++ * Patch 0083: brcmfmac.h1b_sync_ms=N (default 0) logs a marker and sleeps N ms at each step of the msgbuf attach and before the first ioctl, so each
++ * line reaches the host over the USB network before the next step runs. The log lags the machine by tens of ms, so the last line the host sees
++ * says little about where a reset happens (run 28: the last received line was cut off mid-word).
++ */
++static unsigned int h1b_sync_ms;
++module_param_named(h1b_sync_ms, h1b_sync_ms, uint, 0444);
++MODULE_PARM_DESC(h1b_sync_ms, "J81 test: log a marker and sleep this many ms at each msgbuf attach step (0 = off)");
++
++static void h1b_sync(const char *what)
++{
++	if (!h1b_sync_ms)
++		return;
++	pr_info("t7000-h1b: sync: %s\n", what);
++	msleep(h1b_sync_ms);
++}
++
+ static unsigned int h1b_rxpost;
+ module_param_named(h1b_rxpost, h1b_rxpost, uint, 0444);
+ MODULE_PARM_DESC(h1b_rxpost, "J81 test: post at most this many rx data buffers (0 = the firmware's maximum)");
+@@ -515,9 +532,11 @@
+ 	brcmf_dbg(MSGBUF, "ifidx=%d, cmd=%d, len=%d\n", ifidx, cmd, len);
+ 	*fwerr = 0;
+ 	msgbuf->ctl_completed = false;
++	h1b_sync("query ioctl about to be posted");
+ 	err = brcmf_msgbuf_tx_ioctl(drvr, ifidx, cmd, buf, len);
+ 	if (err)
+ 		return err;
++	h1b_sync("query ioctl posted, waiting for the response");
+ 
+ 	timeout = brcmf_msgbuf_ioctl_resp_wait(msgbuf);
+ 	if (!timeout) {
+@@ -1581,6 +1600,7 @@
+ 	u32 count;
+ 
+ 	if_msgbuf = drvr->bus_if->msgbuf;
++	h1b_sync("msgbuf attach entered");
+ 
+ 	if (if_msgbuf->max_flowrings >= BRCMF_FLOWRING_HASHSIZE) {
+ 		bphy_err(drvr, "driver not configured for this many flowrings %d\n",
+@@ -1615,6 +1635,7 @@
+ 					     GFP_KERNEL);
+ 	if (!msgbuf->ioctbuf)
+ 		goto fail;
++	h1b_sync("ioctl buffer mapped");
+ 	address = (u64)msgbuf->ioctbuf_handle;
+ 	msgbuf->ioctbuf_phys_hi = address >> 32;
+ 	msgbuf->ioctbuf_phys_lo = address & 0xffffffff;
+@@ -1669,6 +1690,7 @@
+ 		  msgbuf->max_rxbufpost, msgbuf->max_eventbuf,
+ 		  msgbuf->max_ioctlrespbuf);
+ 	pr_info("t7000-h1b: feed: mask 0x%x, rx data %d\n", h1b_feed, msgbuf->max_rxbufpost);
++	h1b_sync("before feeding");
+ 	count = 0;
+ 	if (h1b_feed & 1) {
+ 		do {
+@@ -1680,14 +1702,17 @@
+ 			count++;
+ 		} while (count < 10);
+ 		pr_info("t7000-h1b: feed: rx data buffers posted (%d)\n", msgbuf->rxbufpost);
++		h1b_sync("rx data buffers posted");
+ 	}
+ 	if (h1b_feed & 2) {
+ 		brcmf_msgbuf_rxbuf_event_post(msgbuf);
+ 		pr_info("t7000-h1b: feed: event buffers posted\n");
++		h1b_sync("event buffers posted");
+ 	}
+ 	if (h1b_feed & 4) {
+ 		brcmf_msgbuf_rxbuf_ioctlresp_post(msgbuf);
+ 		pr_info("t7000-h1b: feed: ioctl response buffers posted\n");
++		h1b_sync("ioctl response buffers posted");
+ 	}
+ 
+ 	INIT_WORK(&msgbuf->flowring_work, brcmf_msgbuf_flowring_worker);

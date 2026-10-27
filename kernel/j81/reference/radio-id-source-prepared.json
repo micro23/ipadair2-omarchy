@@ -1,0 +1,175 @@
+{
+  "variant": "radio-id",
+  "linux_revision": "6831bc701a6ce059e71e5aaa9488c9195bea6927",
+  "project_revision": "b94d42f78e04c5465e290340a5b6879bbc5956b6",
+  "linux_archive_sha256": "5eca8c1a096009ef867451d08433735ff29548220adb880f85b9840de65bf15f",
+  "base_config_sha256": "a5cbcb0d3fe655888106672e6fe03477b63d51bd36bbcfc4f5145627d906b208",
+  "upstream_recipe": "hoolock-pcie-j81-bcm-shadow.nix",
+  "recipe_sha256": "80944c311ba2f4b4983571d811b7b3afb24f6d9ad1c74dd38725d9fab56dabc9",
+  "patches": [
+    {
+      "name": "0001-t7001-add-uart3-node.patch",
+      "sha256": "149ddbbce15193986a8cce6845f05e75b29a26ab336debfd3b0d37628f631380",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0002-t7001-air2-enable-uart3.patch",
+      "sha256": "4b99aa0ea8370e2cc3c2966e4111966f4cc0196fb5f244837aae0ebee87017e6",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0003-serdev-add-stop-bit-selection.patch",
+      "sha256": "c2abbaf8802382401371fde95ebcc0c28180ef0faa574fb34bd26502672dcad7",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0004-add-bq27xxx-hdq-uart-frontend.patch",
+      "sha256": "60deec2a8d688fe5a2f749cc78c8a2df3c5ef21d7eeee54ad0dd14fe3a754d82",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0005-t7001-add-uart5-node.patch",
+      "sha256": "a065ecf1588ed0a676793fc431c165171e90d511a1a906bcf92a56e18c9b78da",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0006-t7001-air2-enable-uart5-battery.patch",
+      "sha256": "b351daeec36053954f0b2e6245bbec12167ea78d882d681fb862d163f86070bf",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0010-j81-d2207-readonly-charger.patch",
+      "sha256": "dbfcc44214592f146a438e93b5f99d9b7c37198fcf70e27c61c9fb479111acc3",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0007-spi-apple-add-s5l8960x-support.patch",
+      "sha256": "cf4d17de1c0b52fd0a375319cfbee3da8b5f06980af798c640ebb6fc3adfa876",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0008-t7001-add-spi3-node.patch",
+      "sha256": "11d94ebdcbefb87cfd60ba1b15849d7dca1d91555f8821244cd2447b39c19097",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0009-t7001-air2-enable-spi3.patch",
+      "sha256": "ce5613f9f85bd6873f82e616ed5fc411ebbd4f97e280b6eb39b1e0684a88075c",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0011-touchscreen-apple-z2-add-j81.patch",
+      "sha256": "82d7ba6bb0be4f2304fbb1551812edeccedacffb55df23978333f3f75b483359",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0016-pcie-apple-t7000-compile-only-skeleton.patch",
+      "sha256": "653c68bab9cbb57b24dd6e2f49273de3b60e8769f3e194884d9edf9ad6e3f946",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0040-pcie-apple-t7000-tuning-baseline-test.patch",
+      "sha256": "cf9aeb55b24d7e960485d68ea963e669a9758eedd1453c86609c660df2948c3d",
+      "exact_context_fallback": [
+        {
+          "file": "arch/arm64/boot/dts/apple/t7001.dtsi",
+          "old_context_sha256": "515f922001fabb5fb6463f22cdbb98e64a87e5ec88cd57c24868bd703fef598e",
+          "new_context_sha256": "f56fb919dd2deea34c0f9657fc89186968214b1ac6084540ab7cdc25a997cd70"
+        }
+      ]
+    },
+    {
+      "name": "0041-pcie-apple-t7000-dbi-ecam-read-test.patch",
+      "sha256": "888f1bce2c0c6f554462179ac94e1f649ce4a75cb1e83dc0991fc81b37e9f59b",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0042-pcie-apple-t7000-dbi-tunables-write-test.patch",
+      "sha256": "769b701a6a6dbe04c05ba64e086aaf734648d195ff17fb4fa8cfcf4b1cadd6f2",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0043-pcie-apple-t7000-link-state-probe-test.patch",
+      "sha256": "50e3829e487ad30220ae0b0e9feb0e5c5bd972f34afdc4a19f4b9bf37f705636",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0044-pcie-apple-t7000-link-wait-write-test.patch",
+      "sha256": "45acd32df36df37ef16a8ed5ce62f3bcb75ea6a7f0cdf339289cfb0e46a4b9b5",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0045-pcie-apple-t7000-link-speed-write-test.patch",
+      "sha256": "154163c774874e651c49f28b88b9dadfbb507bd84ec1f258c33a54e7022d5c7d",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0052-pcie-apple-t7000-j81-reg-on.patch",
+      "sha256": "18d1ddcce489ec18fe1449d1aa8357f3656cb33088318456c1941c03f6f6a641",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0053-pcie-apple-t7000-link-wait-dllla.patch",
+      "sha256": "dd37c78cbf6489deee9fc703c50c6f04b4727790e2f6a1520d4f940e5c0c05a2",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0054-pcie-apple-t7000-clean-up.patch",
+      "sha256": "1022535f2075596a0491e850c362bca80e0376f5bd645d8f863699a32ce9cd3c",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0055-apple-dart-per-controller-msi-doorbell.patch",
+      "sha256": "38f013ef014ca59da0cb73c0527193c8bee64b118753f5d8e38d166de7bd707a",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0056-pcie-apple-t7000-derive-msi-port-values.patch",
+      "sha256": "41c499db441d37bf9d82cf621592001031be1981a9cdce1a30ce0ea47563ce7b",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0057-pcie-apple-t7000-msi-domain.patch",
+      "sha256": "c5dae7915769cababc85eece0d2f35cf5469b9e60446a24706841e9c17f63310",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0061-pcie-apple-t7000-bcm-probe.patch",
+      "sha256": "b22a14719db5078cb08e522c287bfd1b25f7b3fb1647312088557802af02c1b0",
+      "exact_context_fallback": []
+    },
+    {
+      "name": "0062-pcie-apple-t7000-bcm-shadow-capture.patch",
+      "sha256": "c912ccf86531c28cebc94bb78d0e095d73f31533d5476056ed1b5ddde7931268",
+      "exact_context_fallback": []
+    }
+  ],
+  "configuration_changes": {
+    "ARM64_4K_PAGES": "y",
+    "ARM64_16K_PAGES": "n",
+    "I2C_CHARDEV": "y",
+    "DEBUG_INFO": "n",
+    "DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT": "n",
+    "DEBUG_INFO_COMPRESSED_NONE": "n",
+    "DEBUG_INFO_NONE": "y",
+    "INPUT_TOUCHSCREEN": "y",
+    "BATTERY_BQ27XXX_HDQ_UART": "y",
+    "CHARGER_J81_D2207": "y",
+    "TOUCHSCREEN_APPLE_Z2": "y",
+    "PCIE_APPLE_T7000": "y",
+    "BLOCK": "n",
+    "MTD": "n",
+    "LOCALVERSION_AUTO": "n",
+    "PCIE_APPLE_T7000_BCM_PROBE": "y",
+    "PCIE_APPLE_T7000_BCM_PROBE_SHADOW": "y",
+    "DEBUG_FS": "y",
+    "WIRELESS": "n",
+    "WLAN": "n",
+    "BRCMFMAC": "n",
+    "PCIE_APPLE_T7000_MSI_SELFTEST": "n",
+    "LOCALVERSION": "\"-j81-radio-id\""
+  },
+  "backlight_fix": "Exact default-return fix carried by upstream Nix recipe",
+  "build_method": "isolated fresh make build, not a Nix-produced binary",
+  "hardware_tested": false
+}

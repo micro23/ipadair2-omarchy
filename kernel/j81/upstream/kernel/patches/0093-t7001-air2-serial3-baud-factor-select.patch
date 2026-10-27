@@ -1,0 +1,15 @@
+diff --git a/arch/arm64/boot/dts/apple/t7001-air2.dtsi b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -96,6 +96,11 @@
+ 	pinctrl-0 = <&uart3_pins>;
+ 	pinctrl-names = "default";
+ 	uart-has-rtscts;
++	/*
++	 * The ADT asks for 3 Mbaud on this (Bluetooth) UART from the first byte (transport-speed 0x2dc6c0). The Apple S5L UART reaches it with the sampling-factor
++	 * field in the upper half of UBRDIV (baud = 24 MHz / ((16 - i) x (div + 1)); measured, research/2026-10-11-uart3-register-capture.md); the legacy divider tops out at 1.5 Mbaud.
++	 */
++	apple,baud-factor-select;
+ };
+ 
+ /*

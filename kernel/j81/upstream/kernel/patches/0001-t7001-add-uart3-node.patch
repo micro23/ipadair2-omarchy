@@ -1,0 +1,64 @@
+--- a/arch/arm64/boot/dts/apple/t7001.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001.dtsi
+@@ -20,6 +20,12 @@
+ 	aliases {
+ 		ausbphy0 = &ausbphy0; /* Used by loader */
+ 		serial0 = &serial0;
++		/*
++		 * No bluetooth0 alias yet: that only matters once a real
++		 * bluetooth child node exists (see serial3's comment below
++		 * and the BT-1 plan) -- m1n1's mac-address-bluetooth0 copy
++		 * has nothing to attach to until then.
++		 */
+ 	};
+ 
+ 	clkref: clock-ref {
+@@ -146,6 +152,26 @@
+ 			status = "disabled";
+ 		};
+ 
++		/*
++		 * Bluetooth transport (BCM43540 combo chip). Register base,
++		 * IRQ 161 and clock gate 0x53 confirmed against a real J81
++		 * ADT capture, byte-for-byte matching the T7001-family J82
++		 * sibling reference this binding was originally drafted
++		 * from -- see docs/plans/2026-09-08-j81-bluetooth-battery-adt.md.
++		 */
++		serial3: serial@20a0cc000 {
++			compatible = "apple,s5l-uart";
++			reg = <0x2 0x0a0cc000 0x0 0x4000>;
++			reg-io-width = <4>;
++			interrupt-parent = <&aic>;
++			interrupts = <AIC_IRQ 161 IRQ_TYPE_LEVEL_HIGH>;
++			/* Use the bootloader-enabled clocks for now. */
++			clocks = <&clkref>, <&clkref>;
++			clock-names = "uart", "clk_uart_baud0";
++			power-domains = <&ps_uart3>;
++			status = "disabled";
++		};
++
+ 		i2c0: i2c@20a110000 {
+ 			compatible = "apple,t7000-i2c", "apple,i2c";
+ 			reg = <0x2 0x0a110000 0x0 0x1000>;
+@@ -329,6 +355,21 @@
+ 				pinmux = <APPLE_PINMUX(135, 1)>,
+ 					 <APPLE_PINMUX(134, 1)>;
+ 			};
++
++			/*
++			 * AP GPIO 14 (TX) and 32 (RTS), function 2 (UART),
++			 * independently decoded from the real J81 ADT's
++			 * function-tx/function-rts OIPG descriptors on
++			 * uart3, then cross-checked against the pre-existing
++			 * J82-derived numbers in the plan doc -- exact match.
++			 * RX/CTS are not separately pin-muxed in the ADT
++			 * (fixed routing on this controller); only TX/RTS
++			 * need an explicit pinmux entry here.
++			 */
++			uart3_pins: uart3-pins {
++				pinmux = <APPLE_PINMUX(14, 2)>,
++					 <APPLE_PINMUX(32, 2)>;
++			};
+ 		};
+ 	};
+ 

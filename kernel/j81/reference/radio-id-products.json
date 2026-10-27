@@ -1,0 +1,19 @@
+{
+  "kernel_release": "7.3.0-rc1-j81-radio-id",
+  "variant": "radio-id",
+  "hardware_tested": false,
+  "files": {
+    "Image": {
+      "bytes": 18178560,
+      "sha256": "4e78dd128cdf6a673e3e70e30154cf22c4fd99a29463e14c9a948356664fd5fe"
+    },
+    "kernel.config": {
+      "bytes": 133777,
+      "sha256": "67bacc2e3f2ed37a848d11d2b2e002ba19ed8f445256624ed51b7f059f0725ef"
+    },
+    "t7001-j81.dtb": {
+      "bytes": 22780,
+      "sha256": "d2355a26d28088830a29164e707a4e1fae1bbb200da35e72e89399e43100aacc"
+    }
+  }
+}

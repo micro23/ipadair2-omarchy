@@ -1,0 +1,695 @@
+{
+  "purpose": "Exact unchanged public source copied from qualified local build inputs. This list is provenance, not a runnable bundle manifest.",
+  "files": [
+    {
+      "path": "kernel/j81/reference/build_kernels.py",
+      "source": "J81-WiFi-Preparation-v1/source/kernel/build_kernels.py",
+      "sha256": "d012901b1a2ff2b6aea92573df8de4f7946e43fd6f532334935ab30d79496357",
+      "bytes": 14796
+    },
+    {
+      "path": "kernel/j81/reference/verify_built.py",
+      "source": "J81-WiFi-Preparation-v1/source/kernel/verify_built.py",
+      "sha256": "db8287205707092973d0055f7225ec3867d9c2eb8793c6396641ada2eb9e709d",
+      "bytes": 6298
+    },
+    {
+      "path": "kernel/j81/reference/toolchain-packages.json",
+      "source": "J81-WiFi-Preparation-v1/source/kernel/toolchain-packages.json",
+      "sha256": "45c8fe744bd429e23d0f09a97b8620430d59ccbf661d16b9ad2f51f2554398cd",
+      "bytes": 10267
+    },
+    {
+      "path": "kernel/j81/configs/baseline.config",
+      "source": "J81-WiFi-Preparation-v1/source/kernel/wifi/config_16k.original",
+      "sha256": "a5cbcb0d3fe655888106672e6fe03477b63d51bd36bbcfc4f5145627d906b208",
+      "bytes": 138506
+    },
+    {
+      "path": "kernel/j81/configs/radio-id.config",
+      "source": "J81-WiFi-Preparation-v1/payloads/radio-id/kernel.config",
+      "sha256": "67bacc2e3f2ed37a848d11d2b2e002ba19ed8f445256624ed51b7f059f0725ef",
+      "bytes": 133777
+    },
+    {
+      "path": "kernel/j81/device-tree/t7001-j81-radio-id.dts",
+      "source": "J81-WiFi-Preparation-v1/payloads/radio-id/t7001-j81.dts",
+      "sha256": "ac44ae4897280bc30b14b416ee6b6285ab626e63d477a8112d8872761c1c3395",
+      "bytes": 29038
+    },
+    {
+      "path": "boot/j81/reference/radio-id.bootargs",
+      "source": "J81-WiFi-Preparation-v1/payloads/radio-id/bootargs",
+      "sha256": "d0464c59b6196e78121dac6e7bf676ea703c1bcd9162c8f8a5c2b55ecc8e6fce",
+      "bytes": 128
+    },
+    {
+      "path": "kernel/j81/reference/radio-id-products.json",
+      "source": "J81-WiFi-Preparation-v1/source/kernel/radio-id/products.json",
+      "sha256": "45988ad490ed1f67938aa3dcc6d2d35841b9d22e71e315acfc54394b0c89aa65",
+      "bytes": 520
+    },
+    {
+      "path": "kernel/j81/reference/radio-id-source-prepared.json",
+      "source": "J81-WiFi-Preparation-v1/source/kernel/radio-id/source-prepared.json",
+      "sha256": "d32b5c7856781433547ee531936e485fbd18ec76a80214548b264f010674d9e8",
+      "bytes": 6665
+    },
+    {
+      "path": "kernel/j81/configs/wifi.config",
+      "source": "J81-WiFi-Preparation-v1/payloads/wifi-base/kernel.config",
+      "sha256": "061a2e31f3d53e7549bd292539717119fb3cc63f4eb4816f286abd601675082f",
+      "bytes": 136244
+    },
+    {
+      "path": "kernel/j81/device-tree/t7001-j81-wifi.dts",
+      "source": "J81-WiFi-Preparation-v1/payloads/wifi-base/t7001-j81.dts",
+      "sha256": "756f0ddad3aa4bb99eaea8b1947f76027b51582825d544c1ef4653b0a0e8f2a1",
+      "bytes": 29991
+    },
+    {
+      "path": "boot/j81/reference/wifi.bootargs",
+      "source": "J81-WiFi-Preparation-v1/payloads/wifi-base/bootargs",
+      "sha256": "3832f2dfa7283e3ed942a477e165ddf8be712f1683e5eb71af5343db9e235a13",
+      "bytes": 177
+    },
+    {
+      "path": "kernel/j81/reference/wifi-products.json",
+      "source": "J81-WiFi-Preparation-v1/source/kernel/wifi/products.json",
+      "sha256": "dccf821d9edb22d424830f157e7bf31e7c1f30f3263ced1e5546516f8ec2d641",
+      "bytes": 516
+    },
+    {
+      "path": "kernel/j81/reference/wifi-source-prepared.json",
+      "source": "J81-WiFi-Preparation-v1/source/kernel/wifi/source-prepared.json",
+      "sha256": "dbda05c3d6f3372bad332c8512edeb9b2e57d881f7ac89f9b48d3ff3360d0381",
+      "bytes": 14507
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/hoolock-pcie-j81-wifi-h1b.nix",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/hoolock-pcie-j81-wifi-h1b.nix",
+      "sha256": "48e750a35e497b84706f6c1e1583e962db75d7c427882492ee9fd6540d829a73",
+      "bytes": 9014
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/hoolock-pcie-j81-bcm-shadow.nix",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/hoolock-pcie-j81-bcm-shadow.nix",
+      "sha256": "80944c311ba2f4b4983571d811b7b3afb24f6d9ad1c74dd38725d9fab56dabc9",
+      "bytes": 4062
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0001-t7001-add-uart3-node.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0001-t7001-add-uart3-node.patch",
+      "sha256": "149ddbbce15193986a8cce6845f05e75b29a26ab336debfd3b0d37628f631380",
+      "bytes": 2028
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0002-t7001-air2-enable-uart3.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0002-t7001-air2-enable-uart3.patch",
+      "sha256": "4b99aa0ea8370e2cc3c2966e4111966f4cc0196fb5f244837aae0ebee87017e6",
+      "bytes": 1162
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0003-serdev-add-stop-bit-selection.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0003-serdev-add-stop-bit-selection.patch",
+      "sha256": "c2abbaf8802382401371fde95ebcc0c28180ef0faa574fb34bd26502672dcad7",
+      "bytes": 3817
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0004-add-bq27xxx-hdq-uart-frontend.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0004-add-bq27xxx-hdq-uart-frontend.patch",
+      "sha256": "60deec2a8d688fe5a2f749cc78c8a2df3c5ef21d7eeee54ad0dd14fe3a754d82",
+      "bytes": 14448
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0005-t7001-add-uart5-node.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0005-t7001-add-uart5-node.patch",
+      "sha256": "a065ecf1588ed0a676793fc431c165171e90d511a1a906bcf92a56e18c9b78da",
+      "bytes": 1885
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0006-t7001-air2-enable-uart5-battery.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0006-t7001-air2-enable-uart5-battery.patch",
+      "sha256": "b351daeec36053954f0b2e6245bbec12167ea78d882d681fb862d163f86070bf",
+      "bytes": 1473
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0010-j81-d2207-readonly-charger.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0010-j81-d2207-readonly-charger.patch",
+      "sha256": "dbfcc44214592f146a438e93b5f99d9b7c37198fcf70e27c61c9fb479111acc3",
+      "bytes": 4937
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0007-spi-apple-add-s5l8960x-support.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0007-spi-apple-add-s5l8960x-support.patch",
+      "sha256": "cf4d17de1c0b52fd0a375319cfbee3da8b5f06980af798c640ebb6fc3adfa876",
+      "bytes": 16070
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0008-t7001-add-spi3-node.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0008-t7001-add-spi3-node.patch",
+      "sha256": "11d94ebdcbefb87cfd60ba1b15849d7dca1d91555f8821244cd2447b39c19097",
+      "bytes": 1847
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0009-t7001-air2-enable-spi3.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0009-t7001-air2-enable-spi3.patch",
+      "sha256": "ce5613f9f85bd6873f82e616ed5fc411ebbd4f97e280b6eb39b1e0684a88075c",
+      "bytes": 644
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0011-touchscreen-apple-z2-add-j81.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0011-touchscreen-apple-z2-add-j81.patch",
+      "sha256": "82d7ba6bb0be4f2304fbb1551812edeccedacffb55df23978333f3f75b483359",
+      "bytes": 2323
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0017-j81-d2207-charger-writable-input-current-limit.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0017-j81-d2207-charger-writable-input-current-limit.patch",
+      "sha256": "f38e4382b5cfd0ea10f2ba010572e4150b8549459b8b5e94ec838bb6b9bea996",
+      "bytes": 4446
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0016-pcie-apple-t7000-compile-only-skeleton.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0016-pcie-apple-t7000-compile-only-skeleton.patch",
+      "sha256": "653c68bab9cbb57b24dd6e2f49273de3b60e8769f3e194884d9edf9ad6e3f946",
+      "bytes": 6177
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0040-pcie-apple-t7000-tuning-baseline-test.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0040-pcie-apple-t7000-tuning-baseline-test.patch",
+      "sha256": "cf9aeb55b24d7e960485d68ea963e669a9758eedd1453c86609c660df2948c3d",
+      "bytes": 17599
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0041-pcie-apple-t7000-dbi-ecam-read-test.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0041-pcie-apple-t7000-dbi-ecam-read-test.patch",
+      "sha256": "888f1bce2c0c6f554462179ac94e1f649ce4a75cb1e83dc0991fc81b37e9f59b",
+      "bytes": 1709
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0042-pcie-apple-t7000-dbi-tunables-write-test.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0042-pcie-apple-t7000-dbi-tunables-write-test.patch",
+      "sha256": "769b701a6a6dbe04c05ba64e086aaf734648d195ff17fb4fa8cfcf4b1cadd6f2",
+      "bytes": 9141
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0043-pcie-apple-t7000-link-state-probe-test.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0043-pcie-apple-t7000-link-state-probe-test.patch",
+      "sha256": "50e3829e487ad30220ae0b0e9feb0e5c5bd972f34afdc4a19f4b9bf37f705636",
+      "bytes": 4885
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0044-pcie-apple-t7000-link-wait-write-test.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0044-pcie-apple-t7000-link-wait-write-test.patch",
+      "sha256": "45acd32df36df37ef16a8ed5ce62f3bcb75ea6a7f0cdf339289cfb0e46a4b9b5",
+      "bytes": 12346
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0045-pcie-apple-t7000-link-speed-write-test.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0045-pcie-apple-t7000-link-speed-write-test.patch",
+      "sha256": "154163c774874e651c49f28b88b9dadfbb507bd84ec1f258c33a54e7022d5c7d",
+      "bytes": 5303
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0052-pcie-apple-t7000-j81-reg-on.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0052-pcie-apple-t7000-j81-reg-on.patch",
+      "sha256": "18d1ddcce489ec18fe1449d1aa8357f3656cb33088318456c1941c03f6f6a641",
+      "bytes": 6547
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0053-pcie-apple-t7000-link-wait-dllla.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0053-pcie-apple-t7000-link-wait-dllla.patch",
+      "sha256": "dd37c78cbf6489deee9fc703c50c6f04b4727790e2f6a1520d4f940e5c0c05a2",
+      "bytes": 5322
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0054-pcie-apple-t7000-clean-up.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0054-pcie-apple-t7000-clean-up.patch",
+      "sha256": "1022535f2075596a0491e850c362bca80e0376f5bd645d8f863699a32ce9cd3c",
+      "bytes": 28616
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0055-apple-dart-per-controller-msi-doorbell.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0055-apple-dart-per-controller-msi-doorbell.patch",
+      "sha256": "38f013ef014ca59da0cb73c0527193c8bee64b118753f5d8e38d166de7bd707a",
+      "bytes": 3412
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0056-pcie-apple-t7000-derive-msi-port-values.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0056-pcie-apple-t7000-derive-msi-port-values.patch",
+      "sha256": "41c499db441d37bf9d82cf621592001031be1981a9cdce1a30ce0ea47563ce7b",
+      "bytes": 3897
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0057-pcie-apple-t7000-msi-domain.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0057-pcie-apple-t7000-msi-domain.patch",
+      "sha256": "c5dae7915769cababc85eece0d2f35cf5469b9e60446a24706841e9c17f63310",
+      "bytes": 14763
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0063-apple-dart-pci-iova-window.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0063-apple-dart-pci-iova-window.patch",
+      "sha256": "5bf1e44656737eba15ca87291d4502768d1a89f45f1c6d641bbf6df2df95de1d",
+      "bytes": 7168
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0064-t7001-air2-pcie-iova-rebase.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0064-t7001-air2-pcie-iova-rebase.patch",
+      "sha256": "39d26ef7c308da306584953c8aa67dd1373cf537f835c10be310d46e4bc2536b",
+      "bytes": 1989
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0065-brcmfmac-pcie-h1b-diag.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0065-brcmfmac-pcie-h1b-diag.patch",
+      "sha256": "0360d2c261850fe873ceeaabc8a937a25c14cee02d8b653f305303f5e5d331a1",
+      "bytes": 8035
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0066-readonly-debugfs-diag-dart-and-t7000-port.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0066-readonly-debugfs-diag-dart-and-t7000-port.patch",
+      "sha256": "a8112c069456fe1e8212ff39df25896ff8d9fa0f2344ac2d47497dac89b57b71",
+      "bytes": 5819
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0067-j81-wifi-deep-sleep-and-device-wake-toggles.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0067-j81-wifi-deep-sleep-and-device-wake-toggles.patch",
+      "sha256": "3b94c968cca3314f270038ac62cb567c0999cc455413540819a0aae15241c3db",
+      "bytes": 5563
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0068-brcmfmac-h1b-console-poll-and-shared-state.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0068-brcmfmac-h1b-console-poll-and-shared-state.patch",
+      "sha256": "30c36d49986da43b0e285c8d758e313733ba0aab684f8feecb36c5d141ed5f0c",
+      "bytes": 3840
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0069-brcmfmac-h1b-chipcommon-gpio-snapshot.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0069-brcmfmac-h1b-chipcommon-gpio-snapshot.patch",
+      "sha256": "a336c8ac9bb80c10bf9e1eb9668588620bace5c37fb73652ea91cc03f46e8a9d",
+      "bytes": 2879
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0070-brcmfmac-h1b-apple-shared-memory-parity.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0070-brcmfmac-h1b-apple-shared-memory-parity.patch",
+      "sha256": "0aa932be15acba935de7ec9ad6f15d30e7e8abce4195a30cac4ebecc13568e6e",
+      "bytes": 4476
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0071-brcmfmac-h1b-readonly-query-interface.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0071-brcmfmac-h1b-readonly-query-interface.patch",
+      "sha256": "76f9a7b7671a1c09e8966ec6c6a0e7656961c902e90c53e3da8ace8d06e54b74",
+      "bytes": 9890
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0072-brcmfmac-h1b-ring-ids-and-safe-register-reads.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0072-brcmfmac-h1b-ring-ids-and-safe-register-reads.patch",
+      "sha256": "da58c75ffa6525c225e6dc18c6c3f0fbb473cbd5dc1a7db76a75f44550ee7be5",
+      "bytes": 3861
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0073-brcmfmac-h1b-query-snapshot-arm-and-gated-rom.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0073-brcmfmac-h1b-query-snapshot-arm-and-gated-rom.patch",
+      "sha256": "9c06e39c8184aedd74b183b393b53dbad9c622861ba1d2c83a9debe22bc293ef",
+      "bytes": 7860
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0074-brcmfmac-h1b-deferred-pcie-registration.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0074-brcmfmac-h1b-deferred-pcie-registration.patch",
+      "sha256": "0a95cc8dd9250f506e70008bce384e4bf78442d5250530374295d1a9f7b8a6b4",
+      "bytes": 1750
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0075-brcmfmac-h1b-drop-unsafe-chipcommon-reads.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0075-brcmfmac-h1b-drop-unsafe-chipcommon-reads.patch",
+      "sha256": "470e5493adb90fcfb61cd16b69f215b5e1e2d570f6331759aefb81589edc6c60",
+      "bytes": 2765
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0076-apple-dart-pci-rebase-boot-override.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0076-apple-dart-pci-rebase-boot-override.patch",
+      "sha256": "8a53ea5215cb7c8065ba41c2c0b46a89ead38a6638afae73fb01386a81478f6e",
+      "bytes": 1770
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0077-brcmfmac-h1b-fast-console-poll.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0077-brcmfmac-h1b-fast-console-poll.patch",
+      "sha256": "92969414bcc7383aa10f2f15a904cb5e94dbcbd12ab11b57fc72b08ffbcff0b0",
+      "bytes": 1980
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0078-brcmfmac-h1b-setup-step-pauses.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0078-brcmfmac-h1b-setup-step-pauses.patch",
+      "sha256": "36540f0c4b8264876b6aedccef758381dc4b177c8e47f275adc786ff7c13b300",
+      "bytes": 2595
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0079-brcmfmac-h1b-tcm-indices-and-bell-only.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0079-brcmfmac-h1b-tcm-indices-and-bell-only.patch",
+      "sha256": "b8bf5a07b387dec56347a25b95d3aaf02904069c472477768f5cb6be99d7fb0a",
+      "bytes": 3113
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0080-apple-dart-pci-alias-raw-index-mapping.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0080-apple-dart-pci-alias-raw-index-mapping.patch",
+      "sha256": "8da1ee250641bd0be39dc1cafc95f62b07f3170241c228faeb335670164c373a",
+      "bytes": 3079
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0081-apple-dart-s5l8960x-ios-pte-format.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0081-apple-dart-s5l8960x-ios-pte-format.patch",
+      "sha256": "bb6bbdfc22544d6f64193d8ba9a65f9cddfe55419ec939b821aa8dace015aeec",
+      "bytes": 4036
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0082-brcmfmac-h1b-split-buffer-feeding.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0082-brcmfmac-h1b-split-buffer-feeding.patch",
+      "sha256": "0c90542f3e23d4a9446b73a626cf44adea9e50b61cdaf60e766143b48cb90eb5",
+      "bytes": 2875
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0083-brcmfmac-h1b-sync-sleeps.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0083-brcmfmac-h1b-sync-sleeps.patch",
+      "sha256": "b1f093f222dce5f051da6df0ed77ce31734b9e45dd14052767e2aed5e02d758c",
+      "bytes": 3213
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0084-brcmfmac-h1b-skip-doorbell.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0084-brcmfmac-h1b-skip-doorbell.patch",
+      "sha256": "0695f84633fccc63230416ec9a92ef254d795720451ded314fb130d0ee3e27fe",
+      "bytes": 1276
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0085-apple-dart-h1b-apple-init-order.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0085-apple-dart-h1b-apple-init-order.patch",
+      "sha256": "ca6ad0aba86ee63b50e2a5a22912874d66945690b96bf38571e2e0032fbd7421",
+      "bytes": 2788
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0086-apple-dart-s5l8960x-irq-null-cfg.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0086-apple-dart-s5l8960x-irq-null-cfg.patch",
+      "sha256": "208c0fa8a963b52414ce122a6f0cfcd867e62baa36e04c00132c4418fedb208a",
+      "bytes": 938
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0087-apple-dart-h1b-fault-page-walk.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0087-apple-dart-h1b-fault-page-walk.patch",
+      "sha256": "f98c3c958bdad73f3a52f22483065d76f7e0014ee9daea034c55732dbb62106e",
+      "bytes": 2641
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0088-io-pgtable-dart-ios-leaf-bits.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0088-io-pgtable-dart-ios-leaf-bits.patch",
+      "sha256": "7c99b0773b3ca3b4e3967a25e60ff9f8b7583a4cbb31b49f74108e33925d6d68",
+      "bytes": 1401
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0089-apple-dart-j81-options-from-device-tree.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0089-apple-dart-j81-options-from-device-tree.patch",
+      "sha256": "4da22d45d6d11262303a6079c7cf813e55ebc30b8ade5e45c4b3ba8d27c3dec1",
+      "bytes": 9314
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0090-t7001-air2-pcie-dart-options-and-wifi-node.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0090-t7001-air2-pcie-dart-options-and-wifi-node.patch",
+      "sha256": "e4c7ab0854e9049739dfc9b6464b689a24508afda6cbb3e84336214e590f931f",
+      "bytes": 3164
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0091-bq27xxx-hdq-uart-retry-identification.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0091-bq27xxx-hdq-uart-retry-identification.patch",
+      "sha256": "ef39ea7631a99bdb5ad344a4f875fcea5c1c86604d2affd108fd298c143bd641",
+      "bytes": 1654
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0092-samsung-tty-apple-s5l-sampling-factor-baud.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0092-samsung-tty-apple-s5l-sampling-factor-baud.patch",
+      "sha256": "feba69a9bfe6e1c049cc49bd80825c3dd37bdb27e37ce5faee5c36a2320cab99",
+      "bytes": 2645
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0093-t7001-air2-serial3-baud-factor-select.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0093-t7001-air2-serial3-baud-factor-select.patch",
+      "sha256": "92d35d009458f53b89737bf16cccc109baefac8f47d557b592e59630363f0482",
+      "bytes": 678
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0094-brcmfmac-msgbuf-h1b-toggles-only-with-diag.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0094-brcmfmac-msgbuf-h1b-toggles-only-with-diag.patch",
+      "sha256": "8dbea35df9ecb6e22c08910257f3309cec9516173648b1f73e0c01c4fad35e25",
+      "bytes": 2647
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0095-t7001-air2-spi3-touch-spidev-child-disabled.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0095-t7001-air2-spi3-touch-spidev-child-disabled.patch",
+      "sha256": "9edb1cb935d846ce516c43167e21e81089d6b34abd8c57af1dfc1b86a6ddadcb",
+      "bytes": 1041
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0096-spi-apple-s5l-word-delay.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0096-spi-apple-s5l-word-delay.patch",
+      "sha256": "681443f899806de54e8c6a3ae9b0257adfe0e8a4ed1f174834ae364806382db1",
+      "bytes": 1015
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0097-t7001-air2-touch-diag-cs-delays.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0097-t7001-air2-touch-diag-cs-delays.patch",
+      "sha256": "b7235a68ff2e1bad53fe71fc38f4ec9535a0a093b991f3782862dc9d4a17d9fe",
+      "bytes": 558
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0098-spi-apple-s5l-do-not-end-large-transfers-after-one-fifo.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0098-spi-apple-s5l-do-not-end-large-transfers-after-one-fifo.patch",
+      "sha256": "2436deeeb29d641b2b1e8db622872d9b74e892e2c2505429d35d09226682aecd",
+      "bytes": 2989
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0099-j81-d2207-charger-vbus-adc-measurement.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0099-j81-d2207-charger-vbus-adc-measurement.patch",
+      "sha256": "cf7f4e82aad5dfbfff6c143c88cde63d837f834e1572c31376158f41ccbbc9a2",
+      "bytes": 6495
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0100-t7001-spi3-60mhz-functional-clock.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0100-t7001-spi3-60mhz-functional-clock.patch",
+      "sha256": "458531b67da02cf2b95a9c1fcc225693f1596795238b3d1a7622f9c47f5135bb",
+      "bytes": 1183
+    },
+    {
+      "path": "kernel/j81/upstream/boot/verify_pcie_j81_reg_on_payload.py",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/boot/verify_pcie_j81_reg_on_payload.py",
+      "sha256": "fb6137746b61b56d2b3d26d6b96e2eb4d7bfb2f5b556678220fdea4a9c0afa8d",
+      "bytes": 17830
+    },
+    {
+      "path": "boot/j81/reference/assemble_payloads.py",
+      "source": "J81-WiFi-Preparation-v1/source/assembly/assemble_payloads.py",
+      "sha256": "e2ca9a6c32646623031505d6abe2c1db24652e9c6cb76b202c9168438f5637a8",
+      "bytes": 12901
+    },
+    {
+      "path": "boot/j81/reference/ramdisk/archive_support.py",
+      "source": "J81-WiFi-Preparation-v1/source/assembly/ramdisk/archive_support.py",
+      "sha256": "86958125b3a4a111dd0a724d80f1bd2d0631c30b02c5bebbe4a4217a1f1d608a",
+      "bytes": 10177
+    },
+    {
+      "path": "boot/j81/reference/ramdisk/init-base",
+      "source": "J81-WiFi-Preparation-v1/source/assembly/ramdisk/init-base",
+      "sha256": "4de8a744f30c16a1f00b84ab577efff262b314306459cb95d97cd13ef8c49a7c",
+      "bytes": 5366
+    },
+    {
+      "path": "boot/j81/reference/ramdisk/ram-shell",
+      "source": "J81-WiFi-Preparation-v1/source/assembly/ramdisk/ram-shell",
+      "sha256": "09c7a9eeb704a59577ba78c42ca10da82e88e58b29727dce4baa0c1d6504d87d",
+      "bytes": 121
+    },
+    {
+      "path": "firmware/j81/prepare_firmware.py",
+      "source": "J81-WiFi-Preparation-v1/firmware/prepare_firmware.py",
+      "sha256": "5b8cc0707cf7e73e0830ab73de8d171438d980009299ba0b90b3c959fed3736e",
+      "bytes": 38160
+    },
+    {
+      "path": "firmware/j81/radio_identity_fixed.py",
+      "source": "J81-Radio-Report-Fix1/radio_identity_fixed.py",
+      "sha256": "5a3950e632839e834c32e9cdad9585ef801a24672e068ed3e0ff38ad9da5804b",
+      "bytes": 9624
+    },
+    {
+      "path": "runtime/j81/reference/wifi_boot.py",
+      "source": "J81-WiFi-RAM-Test-v1/host/wifi_boot.py",
+      "sha256": "914f71af6cf30c30d3dcd1f9949375217abf3bd45c4e5f93bd8c1c1f36aa84f8",
+      "bytes": 29553
+    },
+    {
+      "path": "runtime/j81/reference/wifi_session.py",
+      "source": "J81-WiFi-RAM-Test-v1/host/wifi_session.py",
+      "sha256": "f1c085469a6db2c8ac995e10478a49924b755bb7476660979a157c9200a2b168",
+      "bytes": 40014
+    },
+    {
+      "path": "runtime/j81/reference/tools_stage.py",
+      "source": "J81-WiFi-RAM-Test-v1/host/tools_stage.py",
+      "sha256": "2fcc398b508ebe52bf03384b348c63fe515b9855d0d429d56f1fb155e3e085d9",
+      "bytes": 21979
+    },
+    {
+      "path": "runtime/j81/reference/scan_parser_fixed.py",
+      "source": "J81-WiFi-Scan-Fix1/scan_parser_fixed.py",
+      "sha256": "52e1eb337f13a08afbe26fb85e8e3f8ac9550a0c62e751cad0b5e34e719ac441",
+      "bytes": 3649
+    },
+    {
+      "path": "runtime/j81/reference/dns_parser_fixed.py",
+      "source": "J81-WiFi-Internet-Check-v1/dns_parser_fixed.py",
+      "sha256": "423d971d29ef722756557cd5ebe926315d5310e5ca2cb386a7d9e9236f979f7b",
+      "bytes": 2128
+    },
+    {
+      "path": "runtime/j81/reference/live_connection.py",
+      "source": "J81-WiFi-Internet-Check-v1/live_connection.py",
+      "sha256": "ae5b625bd387d9faa8a46a738094f6f3af9443fc20f9ff3c026952a489109a9a",
+      "bytes": 4960
+    },
+    {
+      "path": "runtime/j81/reference/usb_shell.py",
+      "source": "J81-WiFi-Preparation-v1/host/usb_shell.py",
+      "sha256": "cc6a02d65018095af7d3c0b1a416f131c474a02ffdf0b299ce35bf3fb99dff7b",
+      "bytes": 4541
+    },
+    {
+      "path": "LICENSES/Linux-COPYING",
+      "source": "J81-WiFi-Preparation-v1/licenses/Linux-COPYING",
+      "sha256": "fb5a425bd3b3cd6071a3a9aff9909a859e7c1158d54d32e07658398cd67eb6a0",
+      "bytes": 496
+    },
+    {
+      "path": "LICENSES/GPL-2.0.txt",
+      "source": "J81-WiFi-Preparation-v1/licenses/GPL-2.0.txt",
+      "sha256": "8780e78a1a737e127f25a65f6d95269bffd36158dc261114de7859b490bfc5aa",
+      "bytes": 18600
+    },
+    {
+      "path": "LICENSES/Linux-syscall-note.txt",
+      "source": "J81-WiFi-Preparation-v1/licenses/Linux-syscall-note.txt",
+      "sha256": "8e378ab93586eb55135d3bc119cce787f7324f48394777d00c34fa3d0be3303f",
+      "bytes": 1258
+    },
+    {
+      "path": "LICENSES/ipad-nixos-LICENSE",
+      "source": "J81-WiFi-Preparation-v1/licenses/ipad-nixos-LICENSE",
+      "sha256": "3dea183794712f6577bdff66b6957dc1aba68de123b9dda839c23a71df2d362a",
+      "bytes": 1080
+    },
+    {
+      "path": "LICENSES/m1n1-LICENSE",
+      "source": "J81-WiFi-Preparation-v1/licenses/m1n1-LICENSE",
+      "sha256": "11ca423a564b52d3b7f260398baa20d016c25ae180fbdd0067c27b7d1ed7b420",
+      "bytes": 1076
+    },
+    {
+      "path": "LICENSES/PongoOS-LICENSE.md",
+      "source": "J81-WiFi-Preparation-v1/licenses/PongoOS-LICENSE.md",
+      "sha256": "650751e8a75da68a4ecfbcdb4c788285f6bce000ed28be1687098a012df92115",
+      "bytes": 30400
+    },
+    {
+      "path": "LICENSES/J81-host-MIT.txt",
+      "source": "J81-WiFi-RAM-Test-v1/LICENSE",
+      "sha256": "2d8cc237592b80b79d14062f46c026755447d696b4508a61945f345523def363",
+      "bytes": 1088
+    },
+    {
+      "path": "LICENSES/firmware-MIT-ipad-nixos.txt",
+      "source": "J81-WiFi-Preparation-v1/firmware/LICENSES/MIT-ipad-nixos.txt",
+      "sha256": "3dea183794712f6577bdff66b6957dc1aba68de123b9dda839c23a71df2d362a",
+      "bytes": 1080
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0061-pcie-apple-t7000-bcm-probe.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0061-pcie-apple-t7000-bcm-probe.patch",
+      "sha256": "b22a14719db5078cb08e522c287bfd1b25f7b3fb1647312088557802af02c1b0",
+      "bytes": 13511
+    },
+    {
+      "path": "kernel/j81/upstream/kernel/patches/0062-pcie-apple-t7000-bcm-shadow-capture.patch",
+      "source": "J81-WiFi-Preparation-v1/source/upstream/kernel/patches/0062-pcie-apple-t7000-bcm-shadow-capture.patch",
+      "sha256": "c912ccf86531c28cebc94bb78d0e095d73f31533d5476056ed1b5ddde7931268",
+      "bytes": 6010
+    },
+    {
+      "path": "runtime/j81/tools-source/build_tools.py",
+      "source": "J81-WiFi-RAM-Test-v1/source/userspace/source/build_tools.py",
+      "sha256": "a59bbbfd5ad4f21bfc10291a6cf4f0c45adb8a1ad9aef1ff01bb2a1f65c651e8",
+      "bytes": 10147
+    },
+    {
+      "path": "runtime/j81/tools-source/package_tools.py",
+      "source": "J81-WiFi-RAM-Test-v1/source/userspace/source/package_tools.py",
+      "sha256": "0c47972a9f45785ec29a410df2299c9910bc0c401233576a4eae06fe885b9e83",
+      "bytes": 15959
+    },
+    {
+      "path": "runtime/j81/tools-source/download-receipt.json",
+      "source": "J81-WiFi-RAM-Test-v1/source/userspace/source/download-receipt.json",
+      "sha256": "41bd308541ea588cea13b8b366c5b8b66509d744474b9d999ae0e507171d093d",
+      "bytes": 778
+    },
+    {
+      "path": "runtime/j81/tools-source/runtime-source-map.json",
+      "source": "J81-WiFi-RAM-Test-v1/source/userspace/source/runtime-source-map.json",
+      "sha256": "5207d87bc5159d28c72a72946efbed760f6863c617aec3ead833516519709e40",
+      "bytes": 1499
+    },
+    {
+      "path": "runtime/j81/tools-source/selected-packages.json",
+      "source": "J81-WiFi-RAM-Test-v1/source/userspace/source/selected-packages.json",
+      "sha256": "10ae4207d1af9b9480655859b3ee074fb47f3a45191de5f67ab94c25a5998b8b",
+      "bytes": 20473
+    },
+    {
+      "path": "runtime/j81/tools-source/toolchain-packages.json",
+      "source": "J81-WiFi-RAM-Test-v1/source/userspace/source/toolchain-packages.json",
+      "sha256": "45c8fe744bd429e23d0f09a97b8620430d59ccbf661d16b9ad2f51f2554398cd",
+      "bytes": 10267
+    },
+    {
+      "path": "LICENSES/wireless-regdb-LICENSE",
+      "source": "J81-WiFi-RAM-Test-v1/source/regulatory/LICENSE",
+      "sha256": "678b0df753c86198fc496d1f1033429bbd57f101472132ee7eaaf9f5e0a7fae1",
+      "bytes": 880
+    },
+    {
+      "path": "runtime/j81/reference/original-host/run-radio-test.py",
+      "source": "J81-WiFi-Preparation-v1/host/run-radio-test.py",
+      "sha256": "350176ef8da461011a9f4a19e80b175a6930d4407fcb5cdf54cb5a77e2e5884f",
+      "bytes": 25914
+    },
+    {
+      "path": "runtime/j81/reference/original-host/boot_flow_base.py",
+      "source": "J81-WiFi-Preparation-v1/host/boot_flow_base.py",
+      "sha256": "f39b040dced49d3423f5cc1ab2c9309356ef4f0f3192944a9825cf30914f5787",
+      "bytes": 28431
+    },
+    {
+      "path": "runtime/j81/reference/original-host/apple_identity.py",
+      "source": "J81-WiFi-Preparation-v1/host/apple_identity.py",
+      "sha256": "717661658e10fce11183206d44070aa2e7b6a7d5ef9f23dd112922402f3c0f5b",
+      "bytes": 7922
+    },
+    {
+      "path": "runtime/j81/reference/original-host/radio_identity.py",
+      "source": "J81-WiFi-Preparation-v1/host/radio_identity.py",
+      "sha256": "70cbd0f8969ef72d2b7e1b288724785798d50975ed288716cf88bc37a208329c",
+      "bytes": 9221
+    },
+    {
+      "path": "runtime/j81/reference/original-host/run-wifi-test.py",
+      "source": "J81-WiFi-RAM-Test-v1/host/run-wifi-test.py",
+      "sha256": "2d93509e42af0dbcbd491ea9b527dfa95f610a3c35425f27b84b6cb6afcddec2",
+      "bytes": 26236
+    }
+  ]
+}

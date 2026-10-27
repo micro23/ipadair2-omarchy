@@ -1,0 +1,122 @@
+diff --git a/drivers/pci/controller/pcie-apple-t7000.c b/drivers/pci/controller/pcie-apple-t7000.c
+--- a/drivers/pci/controller/pcie-apple-t7000.c
++++ b/drivers/pci/controller/pcie-apple-t7000.c
+@@ -2,8 +2,18 @@
+ /*
+  * Apple T7000-family PCIe -- enable-sequence + generic-enumeration +
+  * PERST + controller-tuning/DBI-override RMW + enableGated()'s full
+- * recovered tail + bounded link-up poll (Stage 5E).
++ * recovered tail + bounded link-up poll + recovered maximum-link-speed
++ * RMW (Stage 5F).
+  *
++ * Stage 5F adds the one operation Stage 5E's own review found missing:
++ * J81's ADT `maximum-link-speed = 1` is applied by Apple through a
++ * standard PCIe capability RMW on the root port itself (not a
++ * controller-specific register) -- see
++ * t7000_pcie_set_max_link_speed()'s own comment for the full derivation
++ * and research/t7000-pcie-stage5-handoff.md's "Stage 5F build
++ * instructions" section. Everything else is Stage 5E's already
++ * hardware-verified sequence, unchanged.
++ *
+  * Stage 5D (read-only, superseded here) found that the direct-window
+  * link-up register (+0x88 bit 6) never transitions across a full 1s
+  * window under Stage 5C's write order and content -- strong evidence
+@@ -179,6 +189,29 @@
+  */
+ #define T7000_PCIE_MSI_VECTOR_COUNT	0x124
+ #define T7000_PCIE_MSI_VECTOR_BASE	0x128
++
++/*
++ * Stage 5F: J81's `maximum-link-speed = 1` ADT property, applied by
++ * Apple's FUN_ffffff8002bef7c8() -- a standard PCIe capability RMW on
++ * the root port itself, not a controller-specific register. Decompiled
++ * 2026-09-26 (research/t7000-pcie-stage5-handoff.md's "Stage 5F build
++ * instructions" section): locate PCI Express Capability (ID 0x10) via
++ * the standard capability-list walk from the root port's own config
++ * space (ECAM device-1 offset, bus 0/dev 1/func 0, before generic
++ * enumeration has created a real pci_dev for it), require Gen1 in the
++ * Link Capabilities 2 supported-speeds vector, then clear the low
++ * nibble of Link Control 2 and set it to 1 (2.5 GT/s). +0x2c/+0x30
++ * relative to the capability base are the standard PCI_EXP_LNKCAP2/
++ * PCI_EXP_LNKCTL2 offsets -- this is genuinely generic PCIe, reusing no
++ * Apple-specific mechanism.
++ */
++#define T7000_PCIE_ROOT_PORT_ECAM_OFFSET	0x8000	/* bus 0, dev 1, func 0 */
++#define T7000_PCIE_CAP_PTR_OFFSET		0x34	/* standard PCI Capabilities Pointer */
++#define T7000_PCIE_CAP_ID_EXPRESS		0x10	/* standard PCI Express Capability ID */
++#define T7000_PCIE_CAP_WALK_MAX		48	/* bounded; avoids an infinite loop on a malformed list */
++#define T7000_PCIE_LNKCAP2_OFFSET		0x2c	/* PCIe Link Capabilities 2, relative to cap base */
++#define T7000_PCIE_LNKCTL2_OFFSET		0x30	/* PCIe Link Control 2, relative to cap base */
++#define T7000_PCIE_LNKCAP2_GEN1_SUPPORTED	BIT(1)	/* Supported Link Speeds Vector bit 1 = 2.5 GT/s */
+ 
+ /* Board port 1 is J81's only populated port; this driver never touches
+  * ports 2-4.
+@@ -492,6 +525,52 @@
+ 		 readl(cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET));
+ }
+ 
++/*
++ * Stage 5F: bounded, generic PCIe capability RMW -- see the macro block
++ * above for the full derivation. Skips the write (leaving Stage 5E's
++ * behavior intact) if the capability list, the Gen1 support bit, or the
++ * capability ID readback at the found offset don't match the expected
++ * shape; never guesses an offset or retries.
++ */
++static void t7000_pcie_set_max_link_speed(struct device *dev,
++					   struct pci_config_window *cfg)
++{
++	void __iomem *dev1 = cfg->win + T7000_PCIE_ROOT_PORT_ECAM_OFFSET;
++	u8 cap_ptr;
++	u32 lnkcap2;
++	u16 old, new;
++	int i;
++
++	cap_ptr = readb(dev1 + T7000_PCIE_CAP_PTR_OFFSET);
++	for (i = 0; i < T7000_PCIE_CAP_WALK_MAX && cap_ptr; i++) {
++		if (readb(dev1 + cap_ptr) == T7000_PCIE_CAP_ID_EXPRESS)
++			break;
++		cap_ptr = readb(dev1 + cap_ptr + 1);
++	}
++
++	if (!cap_ptr || readb(dev1 + cap_ptr) != T7000_PCIE_CAP_ID_EXPRESS) {
++		dev_info(dev,
++			 "t7000-pcie link-speed-test: PCI Express capability not found, skipping max-link-speed write\n");
++		return;
++	}
++
++	lnkcap2 = readl(dev1 + cap_ptr + T7000_PCIE_LNKCAP2_OFFSET);
++	if (!(lnkcap2 & T7000_PCIE_LNKCAP2_GEN1_SUPPORTED)) {
++		dev_info(dev,
++			 "t7000-pcie link-speed-test: Gen1 not in supported-speeds vector (lnkcap2=0x%08x), skipping\n",
++			 lnkcap2);
++		return;
++	}
++
++	old = readw(dev1 + cap_ptr + T7000_PCIE_LNKCTL2_OFFSET);
++	new = (old & 0xfff0) | 1;
++	writew(new, dev1 + cap_ptr + T7000_PCIE_LNKCTL2_OFFSET);
++	dev_info(dev,
++		 "t7000-pcie link-speed-test: cap@0x%02x lnkctl2 0x%04x -> 0x%04x (readback 0x%04x)\n",
++		 cap_ptr, old, new,
++		 readw(dev1 + cap_ptr + T7000_PCIE_LNKCTL2_OFFSET));
++}
++
+ static int apple_t7000_pcie_init(struct pci_config_window *cfg)
+ {
+ 	struct device *dev = cfg->parent;
+@@ -519,6 +598,8 @@
+ 	if (ret)
+ 		return ret;
+ 
++	t7000_pcie_set_max_link_speed(dev, cfg);
++
+ 	t7000_pcie_log_dbi_gate(dev, cfg);
+ 
+ 	t7000_pcie_apply_dbi_overrides(dev, cfg);
+@@ -595,5 +676,5 @@
+ };
+ module_platform_driver(apple_t7000_pcie_driver);
+ 
+-MODULE_DESCRIPTION("Apple T7000 PCIe port-1 full recovered enableGated() sequence including tail writes and bounded link-up poll (Stage 5E)");
++MODULE_DESCRIPTION("Apple T7000 PCIe port-1 full recovered enableGated() sequence plus recovered maximum-link-speed capability RMW (Stage 5F)");
+ MODULE_LICENSE("GPL");

@@ -1,0 +1,75 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/msgbuf.c
+@@ -9,6 +9,7 @@
+  ******************************************************************************/
+ 
+ #include <linux/types.h>
++#include <linux/module.h>
+ #include <linux/netdevice.h>
+ #include <linux/etherdevice.h>
+ 
+@@ -24,7 +25,20 @@
+ #include "bus.h"
+ #include "tracepoint.h"
+ 
++/*
++ * Test only (patch 0082): split the buffer feeding of brcmf_proto_msgbuf_attach(). Every failed run (15-27) resets the machine in this step, which
++ * maps 271 receive buffers through the DART and rings the doorbell, while a doorbell with empty rings is harmless.
++ * brcmfmac.h1b_feed: bit 0 rx data buffers, bit 1 event buffers, bit 2 ioctl-response buffers (default 7 = all).
++ * brcmfmac.h1b_rxpost=N (default 0): post at most N rx data buffers instead of the firmware's maximum.
++ */
++static unsigned int h1b_feed = 7;
++module_param_named(h1b_feed, h1b_feed, uint, 0444);
++MODULE_PARM_DESC(h1b_feed, "J81 test: bit mask of buffers to feed at attach (1 data, 2 event, 4 ioctl response; default 7)");
++static unsigned int h1b_rxpost;
++module_param_named(h1b_rxpost, h1b_rxpost, uint, 0444);
++MODULE_PARM_DESC(h1b_rxpost, "J81 test: post at most this many rx data buffers (0 = the firmware's maximum)");
+ 
++
+ #define MSGBUF_IOCTL_RESP_TIMEOUT		msecs_to_jiffies(2000)
+ 
+ #define MSGBUF_TYPE_GEN_STATUS			0x1
+@@ -1649,20 +1663,32 @@
+ 		goto fail;
+ 
+ 
++	if (h1b_rxpost && h1b_rxpost < msgbuf->max_rxbufpost)
++		msgbuf->max_rxbufpost = h1b_rxpost;
+ 	brcmf_dbg(MSGBUF, "Feeding buffers, rx data %d, rx event %d, rx ioctl resp %d\n",
+ 		  msgbuf->max_rxbufpost, msgbuf->max_eventbuf,
+ 		  msgbuf->max_ioctlrespbuf);
++	pr_info("t7000-h1b: feed: mask 0x%x, rx data %d\n", h1b_feed, msgbuf->max_rxbufpost);
+ 	count = 0;
+-	do {
+-		brcmf_msgbuf_rxbuf_data_fill(msgbuf);
+-		if (msgbuf->max_rxbufpost != msgbuf->rxbufpost)
+-			msleep(10);
+-		else
+-			break;
+-		count++;
+-	} while (count < 10);
+-	brcmf_msgbuf_rxbuf_event_post(msgbuf);
+-	brcmf_msgbuf_rxbuf_ioctlresp_post(msgbuf);
++	if (h1b_feed & 1) {
++		do {
++			brcmf_msgbuf_rxbuf_data_fill(msgbuf);
++			if (msgbuf->max_rxbufpost != msgbuf->rxbufpost)
++				msleep(10);
++			else
++				break;
++			count++;
++		} while (count < 10);
++		pr_info("t7000-h1b: feed: rx data buffers posted (%d)\n", msgbuf->rxbufpost);
++	}
++	if (h1b_feed & 2) {
++		brcmf_msgbuf_rxbuf_event_post(msgbuf);
++		pr_info("t7000-h1b: feed: event buffers posted\n");
++	}
++	if (h1b_feed & 4) {
++		brcmf_msgbuf_rxbuf_ioctlresp_post(msgbuf);
++		pr_info("t7000-h1b: feed: ioctl response buffers posted\n");
++	}
+ 
+ 	INIT_WORK(&msgbuf->flowring_work, brcmf_msgbuf_flowring_worker);
+ 	spin_lock_init(&msgbuf->flowring_work_lock);

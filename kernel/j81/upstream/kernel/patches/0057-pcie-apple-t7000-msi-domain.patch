@@ -1,0 +1,391 @@
+diff --git a/drivers/pci/controller/pcie-apple-t7000.c b/drivers/pci/controller/pcie-apple-t7000.c
+--- a/drivers/pci/controller/pcie-apple-t7000.c
++++ b/drivers/pci/controller/pcie-apple-t7000.c
+@@ -27,17 +27,26 @@
+  *     generic ECAM core to enumerate. Apple's controller +0x88 bit 6 is not used: its
+  *     meaning is undecoded and it did not track the link on hardware.
+  *
++ * MSI: when the DT declares `msi-controller`, probe creates a PCI-MSI parent domain
++ * (before step 8, so the root bus inherits it) on top of the AIC. It has 32 hardware-vector
++ * slots, of which only port 1's window (slots 8..15) is allocatable, composes the message
++ * (address = `apple,msi-doorbell`, data = the slot) and maps slot n to AIC line (msi-ranges
++ * base + n). Exactly one vector per device (no multi-MSI, no MSI-X). It touches no controller
++ * register: the port's MSI registers are programmed by step 6, and the doorbell register is
++ * never written (Apple does not write it on this hardware).
++ *
+  * The values, masks, order and delays of steps 2-7 are recovered, not chosen, and
+  * are pinned by kernel/test_pcie_write_sequence.py; change them only with new
+  * evidence. Reads that look like logging are part of the proven sequence too and
+  * are kept in plain locals so they still happen when debug output is compiled out.
+  *
+  * Known limits: the port-1 controller window physically overlaps the DART's MMIO
+- * resource and is mapped non-exclusively on purpose (hardware-proven); there is no
+- * MSI domain; the DLLLA timeout is non-fatal (enumeration is the final authority);
+- * no endpoint driver has run.
++ * resource and is mapped non-exclusively on purpose (hardware-proven); no MSI has
++ * ever been delivered on this hardware; the DLLLA timeout is non-fatal (enumeration is
++ * the final authority); no endpoint driver has run.
+  */
+ 
++#include <linux/bitmap.h>
+ #include <linux/bitops.h>
+ #include <linux/build_bug.h>
+ #include <linux/delay.h>
+@@ -45,11 +54,16 @@
+ #include <linux/gpio/consumer.h>
+ #include <linux/i2c.h>
+ #include <linux/io.h>
++#include <linux/irqchip/irq-msi-lib.h>
++#include <linux/irqdomain.h>
+ #include <linux/jiffies.h>
+ #include <linux/log2.h>
+ #include <linux/module.h>
++#include <linux/msi.h>
++#include <linux/mutex.h>
+ #include <linux/of.h>
+ #include <linux/of_address.h>
++#include <linux/of_irq.h>
+ #include <linux/pci-ecam.h>
+ #include <linux/platform_device.h>
+ #include <linux/regmap.h>
+@@ -746,8 +760,214 @@
+ out_put_client:
+ 	put_device(&client->dev);
+ 	return ret;
++}
++
++/*
++ * MSI parent domain for J81 port 1.
++ *
++ * The controller has 32 hardware MSI vectors (ADT `#msi-vectors`), numbered globally; each is a
++ * separate AIC line, `msi-ranges` base + vector. Port 1 owns the slice starting at
++ * T7000_PCIE_MSI_PORT_BASE, which is what the port's MSICFG/MSIBASE registers were programmed
++ * for, so only those slots may be handed out and the message data is the *global* slot number.
++ *
++ * One vector per device: the BCM4350's driver asks for one, and multi-vector routing (low data
++ * bits) has never been observed on this hardware. The domain therefore advertises neither
++ * MSI_FLAG_MULTI_PCI_MSI nor MSI-X. It performs no register access.
++ */
++#define T7000_PCIE_MSI_NVECS		32
++
++struct t7000_pcie_msi {
++	struct mutex		lock;
++	struct irq_domain	*domain;
++	struct irq_fwspec	fwspec;		/* AIC line of vector 0 (msi-ranges) */
++	u64			doorbell;
++	DECLARE_BITMAP(allocated, T7000_PCIE_MSI_NVECS);
++};
++
++/* Everything outside port 1's window is permanently unavailable. */
++static void t7000_msi_reserve_outside_port(unsigned long *allocated)
++{
++	bitmap_fill(allocated, T7000_PCIE_MSI_NVECS);
++	bitmap_clear(allocated, T7000_PCIE_MSI_PORT_BASE, T7000_PCIE_MSI_PORT_COUNT);
++}
++
++/* The lowest free slot in port 1's window, or -ENOSPC. */
++static int t7000_msi_slot_alloc(unsigned long *allocated)
++{
++	int slot = bitmap_find_free_region(allocated, T7000_PCIE_MSI_NVECS, 0);
++
++	return slot < 0 ? -ENOSPC : slot;
++}
++
++static void t7000_msi_slot_free(unsigned long *allocated, unsigned int slot)
++{
++	if (WARN_ON_ONCE(slot < T7000_PCIE_MSI_PORT_BASE ||
++			 slot >= T7000_PCIE_MSI_PORT_BASE + T7000_PCIE_MSI_PORT_COUNT))
++		return;
++
++	bitmap_release_region(allocated, slot, 0);
+ }
+ 
++static void t7000_msi_compose(u64 doorbell, unsigned int slot, struct msi_msg *msg)
++{
++	msg->address_hi = upper_32_bits(doorbell);
++	msg->address_lo = lower_32_bits(doorbell);
++	msg->data = slot;
++}
++
++static void t7000_msi_compose_msg(struct irq_data *data, struct msi_msg *msg)
++{
++	struct t7000_pcie_msi *msi = irq_data_get_irq_chip_data(data);
++
++	t7000_msi_compose(msi->doorbell, data->hwirq, msg);
++}
++
++static struct irq_chip t7000_msi_bottom_chip = {
++	.name			= "T7000 MSI",
++	.irq_mask		= irq_chip_mask_parent,
++	.irq_unmask		= irq_chip_unmask_parent,
++	.irq_eoi		= irq_chip_eoi_parent,
++	.irq_set_affinity	= irq_chip_set_affinity_parent,
++	.irq_set_type		= irq_chip_set_type_parent,
++	.irq_compose_msi_msg	= t7000_msi_compose_msg,
++};
++
++static int t7000_msi_domain_alloc(struct irq_domain *domain, unsigned int virq,
++				  unsigned int nr_irqs, void *args)
++{
++	struct t7000_pcie_msi *msi = domain->host_data;
++	struct irq_fwspec fwspec = msi->fwspec;
++	int slot, ret;
++
++	/* One vector per device; the parent flags do not allow more. */
++	if (nr_irqs != 1)
++		return -EINVAL;
++
++	mutex_lock(&msi->lock);
++	slot = t7000_msi_slot_alloc(msi->allocated);
++	mutex_unlock(&msi->lock);
++	if (slot < 0)
++		return slot;
++
++	/* AIC line = msi-ranges base + the global slot. */
++	fwspec.param[fwspec.param_count - 2] += slot;
++
++	ret = irq_domain_alloc_irqs_parent(domain, virq, 1, &fwspec);
++	if (ret) {
++		mutex_lock(&msi->lock);
++		t7000_msi_slot_free(msi->allocated, slot);
++		mutex_unlock(&msi->lock);
++		return ret;
++	}
++
++	irq_domain_set_hwirq_and_chip(domain, virq, slot, &t7000_msi_bottom_chip, msi);
++	return 0;
++}
++
++static void t7000_msi_domain_free(struct irq_domain *domain, unsigned int virq,
++				  unsigned int nr_irqs)
++{
++	struct irq_data *d = irq_domain_get_irq_data(domain, virq);
++	struct t7000_pcie_msi *msi = domain->host_data;
++
++	mutex_lock(&msi->lock);
++	t7000_msi_slot_free(msi->allocated, d->hwirq);
++	mutex_unlock(&msi->lock);
++
++	irq_domain_free_irqs_parent(domain, virq, nr_irqs);
++}
++
++static const struct irq_domain_ops t7000_msi_domain_ops = {
++	.alloc	= t7000_msi_domain_alloc,
++	.free	= t7000_msi_domain_free,
++};
++
++static const struct msi_parent_ops t7000_msi_parent_ops = {
++	.supported_flags	= MSI_GENERIC_FLAGS_MASK,
++	.required_flags		= (MSI_FLAG_USE_DEF_DOM_OPS	|
++				   MSI_FLAG_USE_DEF_CHIP_OPS	|
++				   MSI_FLAG_PCI_MSI_MASK_PARENT),
++	.chip_flags		= MSI_CHIP_FLAG_SET_EOI,
++	.bus_select_token	= DOMAIN_BUS_PCI_MSI,
++	.init_dev_msi_info	= msi_lib_init_dev_msi_info,
++};
++
++static void t7000_msi_teardown(void *domain)
++{
++	irq_domain_remove(domain);
++}
++
++/*
++ * Create the MSI parent domain when the board declares `msi-controller`. It must exist before
++ * pci_host_common_init(): once the root bus has been probed without an MSI domain it carries
++ * PCI_BUS_FLAGS_NO_MSI and that cannot be repaired. A declared domain that cannot be created
++ * fails the probe; without `msi-controller` nothing happens.
++ */
++static int t7000_pcie_msi_init(struct device *dev)
++{
++	struct device_node *np = dev->of_node;
++	struct fwnode_handle *fwnode = dev_fwnode(dev);
++	struct of_phandle_args args = {};
++	struct irq_domain_info info = {};
++	struct t7000_pcie_msi *msi;
++	u32 nvecs;
++	int ret;
++
++	if (!of_property_read_bool(np, "msi-controller"))
++		return 0;
++
++	msi = devm_kzalloc(dev, sizeof(*msi), GFP_KERNEL);
++	if (!msi)
++		return -ENOMEM;
++
++	ret = of_property_read_u64(np, "apple,msi-doorbell", &msi->doorbell);
++	if (ret)
++		return dev_err_probe(dev, ret, "msi-controller needs apple,msi-doorbell\n");
++
++	ret = of_parse_phandle_with_args(np, "msi-ranges", "#interrupt-cells", 0, &args);
++	if (ret)
++		return dev_err_probe(dev, ret, "missing msi-ranges\n");
++
++	ret = of_property_read_u32_index(np, "msi-ranges", args.args_count + 1, &nvecs);
++	if (!ret && nvecs != T7000_PCIE_MSI_NVECS)
++		ret = -EINVAL;
++	if (ret) {
++		of_node_put(args.np);
++		return dev_err_probe(dev, ret, "msi-ranges must cover %d vectors\n",
++				     T7000_PCIE_MSI_NVECS);
++	}
++
++	of_phandle_args_to_fwspec(args.np, args.args, args.args_count, &msi->fwspec);
++	of_node_put(args.np);
++	if (msi->fwspec.param_count < 2)
++		return dev_err_probe(dev, -EINVAL, "msi-ranges parent needs a vector number\n");
++
++	mutex_init(&msi->lock);
++	t7000_msi_reserve_outside_port(msi->allocated);
++
++	info.fwnode = fwnode;
++	info.ops = &t7000_msi_domain_ops;
++	info.size = nvecs;
++	info.host_data = msi;
++	info.parent = irq_find_matching_fwspec(&msi->fwspec, DOMAIN_BUS_WIRED);
++	if (!info.parent)
++		return dev_err_probe(dev, -EPROBE_DEFER, "AIC wired domain not registered yet\n");
++
++	msi->domain = msi_create_parent_irq_domain(&info, &t7000_msi_parent_ops);
++	if (!msi->domain)
++		return dev_err_probe(dev, -ENOMEM, "failed to create the MSI parent domain\n");
++
++	ret = devm_add_action_or_reset(dev, t7000_msi_teardown, msi->domain);
++	if (ret)
++		return ret;
++
++	dev_info(dev, "t7000-pcie: MSI domain: slots %d..%d of %d, doorbell 0x%llx\n",
++		 T7000_PCIE_MSI_PORT_BASE,
++		 T7000_PCIE_MSI_PORT_BASE + T7000_PCIE_MSI_PORT_COUNT - 1,
++		 T7000_PCIE_MSI_NVECS, msi->doorbell);
++	return 0;
++}
++
+ static int apple_t7000_pcie_probe(struct platform_device *pdev)
+ {
+ 	struct pci_host_bridge *bridge;
+@@ -769,6 +989,11 @@
+ 		return dev_err_probe(&pdev->dev, ret,
+ 				     "failed to parse PERST# ports\n");
+ 
++	/* Before enumeration, so the root bus inherits the MSI domain. */
++	ret = t7000_pcie_msi_init(&pdev->dev);
++	if (ret)
++		return ret;
++
+ 	return pci_host_common_init(pdev, bridge, &apple_t7000_pcie_ecam_ops);
+ }
+ 
+@@ -788,5 +1013,5 @@
+ };
+ module_platform_driver(apple_t7000_pcie_driver);
+ 
+-MODULE_DESCRIPTION("Apple T7000 PCIe plus board-declared J81 BCM4350 REG_ON");
++MODULE_DESCRIPTION("Apple T7000 PCIe (J81 port 1): board-gated BCM4350 REG_ON and a one-vector MSI domain");
+ MODULE_LICENSE("GPL");
+diff --git a/drivers/pci/controller/Kconfig b/drivers/pci/controller/Kconfig
+--- a/drivers/pci/controller/Kconfig
++++ b/drivers/pci/controller/Kconfig
+@@ -55,19 +55,20 @@
+ 	  If unsure, say Y if you have an Apple Silicon system.
+ 
+ config PCIE_APPLE_T7000
+-	tristate "Apple T7000 PCIe compile-only skeleton"
++	tristate "Apple T7000 PCIe (iPad Air 2 port 1)"
+ 	depends on ARCH_APPLE || COMPILE_TEST
+ 	depends on OF
++	depends on PCI_MSI
++	select PCI_HOST_COMMON
++	select IRQ_MSI_LIB
+ 	help
+-	  Build inert groundwork for the older Apple PCIe host controller in
+-	  T7000-family SoCs. The current driver only verifies the number of
+-	  firmware-described register windows and port interrupts, then refuses
+-	  to bind because clock, PHY, MSI, DART and link-training support is not
+-	  implemented yet. Its matching T7001 topology is disabled in the device
+-	  tree, so the probe is not reached by a normal boot.
+-
+-	  This driver does not map or access MMIO, request interrupts or GPIOs,
+-	  enable power or clocks, start link training, or enumerate a PCI bus.
++	  Board-specific host controller driver for the older Apple PCIe
++	  controller in T7000-family SoCs, bringing up the one populated port
++	  of the iPad Air 2 (J81). It runs Apple's recovered port-1 enable
++	  sequence, applies the board-declared Wi-Fi power resource, and, when
++	  the device tree declares `msi-controller`, provides a one-vector MSI
++	  domain on top of the AIC. It does not support the other ports, power
++	  management, or hot reset.
+ 
+ 	  If unsure, say N.
+ 
+diff --git a/arch/arm64/boot/dts/apple/t7001.dtsi b/arch/arm64/boot/dts/apple/t7001.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001.dtsi
+@@ -402,9 +402,10 @@
+ 			 * stage reads is already within the per-port controller
+ 			 * window already declared in the reg list above and
+ 			 * already proven mappable by 0038/0039. No new writes
+-			 * this stage. msi-controller/msi-parent/msi-ranges stay
+-			 * omitted (no MSI domain implemented). iommu-map is
+-			 * kept from 0032-0039, unchanged.
++			 * this stage. msi-controller/msi-parent/msi-ranges are
++			 * declared per board (t7001-air2.dtsi), together with the
++			 * driver's MSI domain. iommu-map is kept from 0032-0039,
++			 * unchanged.
+ 			 */
+ 			iommu-map = <0x100 &dart_apcie1 0 1>;
+ 			iommu-map-mask = <0xff00>;
+diff --git a/arch/arm64/boot/dts/apple/t7001-air2.dtsi b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -194,7 +194,17 @@
+ 
+ 	/*
+ 	 * MSI doorbell page from the ADT (`msi-address`). The DART reserves it so DMA
+-	 * mappings never use it. No MSI domain exists yet, so nothing writes to it.
++	 * mappings never use it, and the MSI domain composes messages to it.
+ 	 */
+ 	apple,msi-doorbell = <0x0 0xbffff000>;
++
++	/*
++	 * The controller's 32 hardware MSI vectors are AIC lines 224..255 (ADT
++	 * `msi-vector-offset` 224, `#msi-vectors` 32; the AIC reports 256 IRQs). Port 1 owns
++	 * vectors 8..15. These three properties are declared together with the driver's
++	 * MSI domain and must not be added without it.
++	 */
++	msi-controller;
++	msi-parent = <&pcie>;
++	msi-ranges = <&aic AIC_IRQ 224 IRQ_TYPE_EDGE_RISING 32>;
+ };
+diff --git a/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml b/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
+--- a/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
++++ b/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
+@@ -30,6 +30,22 @@
+       mappings never use it. When absent the DART falls back to its global
+       CONFIG_PCIE_APPLE_MSI_DOORBELL_ADDR (0xfffff000, the M1 family value).
+ 
++  msi-controller: true
++
++  msi-parent:
++    maxItems: 1
++    description: |
++      The controller itself. Declared together with msi-controller and msi-ranges, and
++      only on boards where the driver's MSI domain is wanted.
++
++  msi-ranges:
++    $ref: /schemas/types.yaml#/definitions/phandle-array
++    description: |
++      The controller's 32 hardware MSI vectors as AIC lines: <&aic AIC_IRQ 224
++      IRQ_TYPE_EDGE_RISING 32> on J81 (ADT msi-vector-offset 224, #msi-vectors 32). The
++      driver allocates one vector per device, only from port 1's slice (vectors 8..15),
++      and composes the message with data equal to the global vector number.
++
+ additionalProperties: true
+ 
+ examples:
+@@ -38,4 +54,7 @@
+       compatible = "apple,t7000-pcie";
+       apple,reg-on-pmic = <&d2207>;
+       apple,msi-doorbell = <0x0 0xbffff000>;
++      msi-controller;
++      msi-parent = <&pcie>;
++      msi-ranges = <&aic AIC_IRQ 224 IRQ_TYPE_EDGE_RISING 32>;
+     };

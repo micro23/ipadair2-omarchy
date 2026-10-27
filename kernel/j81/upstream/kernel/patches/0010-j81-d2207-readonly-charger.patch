@@ -1,0 +1,143 @@
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -151,6 +151,10 @@
+ 			compatible = "apple,arabela-pmic-bl", "apple,anya-pmic-bl";
+ 			reg = <0x600 0x2>;
+ 		};
++		/* Read-only D2207 charger reporting; no PMIC writes are exposed. */
++		charger {
++			compatible = "apple,j81-d2207-charger";
++		};
+ 
+ 		nvmem@4000 {
+ 			compatible = "apple,pmic-nvmem";
+--- a/drivers/power/supply/Kconfig
++++ b/drivers/power/supply/Kconfig
+@@ -345,6 +345,17 @@
+ 	  battery-adt.md, research/j81-battery-hdq.md). Do not confuse this
+ 	  with BATTERY_BQ27XXX_HDQ, which is a different transport (a real
+ 	  Linux 1-Wire master).
++
++config CHARGER_J81_D2207
++	tristate "J81 D2207 read-only charger reporting"
++	depends on POWER_SUPPLY
++	depends on REGMAP
++	depends on OF
++	help
++	  Say Y here to expose the Apple J81 D2207 charger configuration
++	  through the standard power-supply class. This first stage is
++	  deliberately read-only; it reports the input-current and charge
++	  current settings decoded from the PMIC registers.
+ 
+ config BATTERY_BQ27XXX_DT_UPDATES_NVM
+ 	bool "BQ27xxx support for update of NVM/flash data memory"
+--- a/drivers/power/supply/Makefile
++++ b/drivers/power/supply/Makefile
+@@ -53,6 +53,7 @@
+ obj-$(CONFIG_BATTERY_BQ27XXX_I2C) += bq27xxx_battery_i2c.o
+ obj-$(CONFIG_BATTERY_BQ27XXX_HDQ) += bq27xxx_battery_hdq.o
+ obj-$(CONFIG_BATTERY_BQ27XXX_HDQ_UART) += bq27xxx_battery_hdq_uart.o
++obj-$(CONFIG_CHARGER_J81_D2207) += j81_d2207_charger.o
+ obj-$(CONFIG_BATTERY_DA9030)	+= da9030_battery.o
+ obj-$(CONFIG_BATTERY_DA9052)	+= da9052-battery.o
+ obj-$(CONFIG_CHARGER_DA9150)	+= da9150-charger.o
+--- /dev/null
++++ b/drivers/power/supply/j81_d2207_charger.c
+@@ -0,0 +1,97 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Read-only Apple J81 (T7001) D2207 charger reporting.
++ *
++ * The register locations and conversions are recovered from Apple's
++ * D2207 power-source implementation and checked against live J81 reads.
++ * This driver intentionally has no set_property callback: charging policy
++ * writes remain a separate, meter-backed step.
++ */
++#include <linux/device.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/power_supply.h>
++#include <linux/regmap.h>
++#define J81_D2207_INPUT_CURRENT		0x04c0
++#define J81_D2207_CHARGE_CURRENT_MAX	0x04cf
++struct j81_d2207_charger {
++	struct regmap *regmap;
++};
++/* Apple encodes 75..3262 mA as floor((8*mA - 600) / 100). */
++static int j81_d2207_input_current_ma(unsigned int code)
++{
++	if (code >= 0xfe)
++		return 3262;
++	return 75 + (100 * code + 7) / 8;
++}
++static enum power_supply_property j81_d2207_properties[] = {
++	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
++	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX,
++};
++static int j81_d2207_get_property(struct power_supply *psy,
++					 enum power_supply_property property,
++					 union power_supply_propval *val)
++{
++	struct j81_d2207_charger *charger = power_supply_get_drvdata(psy);
++	unsigned int code;
++	int ret;
++	switch (property) {
++	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
++		ret = regmap_read(charger->regmap, J81_D2207_INPUT_CURRENT, &code);
++		if (ret)
++			return ret;
++		val->intval = j81_d2207_input_current_ma(code) * 1000;
++		return 0;
++	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
++		ret = regmap_read(charger->regmap, J81_D2207_CHARGE_CURRENT_MAX,
++				  &code);
++		if (ret)
++			return ret;
++		/* 0x3c is 3000 mA and 0x3f is the 3150 mA hardware ceiling. */
++		val->intval = (code & 0x3f) * 50000;
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++static const struct power_supply_desc j81_d2207_desc = {
++	.name = "j81-d2207-charger",
++	.type = POWER_SUPPLY_TYPE_USB,
++	.properties = j81_d2207_properties,
++	.num_properties = ARRAY_SIZE(j81_d2207_properties),
++	.get_property = j81_d2207_get_property,
++};
++static int j81_d2207_probe(struct platform_device *pdev)
++{
++	struct j81_d2207_charger *charger;
++	struct power_supply_config config = {
++		.fwnode = dev_fwnode(&pdev->dev),
++	};
++	charger = devm_kzalloc(&pdev->dev, sizeof(*charger), GFP_KERNEL);
++	if (!charger)
++		return -ENOMEM;
++	charger->regmap = dev_get_regmap(pdev->dev.parent, NULL);
++	if (!charger->regmap)
++		return dev_err_probe(&pdev->dev, -ENODEV,
++				     "parent PMIC regmap unavailable\n");
++	config.drv_data = charger;
++	return PTR_ERR_OR_ZERO(devm_power_supply_register(&pdev->dev,
++							 &j81_d2207_desc, &config));
++}
++static const struct of_device_id j81_d2207_of_match[] = {
++	{ .compatible = "apple,j81-d2207-charger" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, j81_d2207_of_match);
++static struct platform_driver j81_d2207_driver = {
++	.probe = j81_d2207_probe,
++	.driver = {
++		.name = "j81-d2207-charger",
++		.of_match_table = j81_d2207_of_match,
++	},
++};
++module_platform_driver(j81_d2207_driver);
++MODULE_DESCRIPTION("Read-only Apple J81 D2207 charger reporting");
++MODULE_LICENSE("GPL");

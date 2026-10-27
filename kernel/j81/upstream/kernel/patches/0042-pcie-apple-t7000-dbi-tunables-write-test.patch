@@ -1,0 +1,217 @@
+diff --git a/drivers/pci/controller/pcie-apple-t7000.c b/drivers/pci/controller/pcie-apple-t7000.c
+--- a/drivers/pci/controller/pcie-apple-t7000.c
++++ b/drivers/pci/controller/pcie-apple-t7000.c
+@@ -1,16 +1,26 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /*
+  * Apple T7000-family PCIe -- enable-sequence + generic-enumeration +
+- * PERST + per-port link-start write + read-only controller-tuning
+- * baseline (Stage 5A).
++ * PERST + per-port link-start write + controller-tuning/DBI-override
++ * RMW (Stage 5C).
+  *
+- * Stage 5A: a read-only baseline capture of the exact ADT-selected
+- * `apcie-config-tunables`/`dbi-overrides` offsets, plus the DBI
+- * write-enable gate at offset 0x0bc -- all in port 1's already-proven
+- * controller window (see `0038`'s header comment for the window's own
+- * derivation and its overlap with `dart_apcie1`'s MMIO region, which is
+- * why this window is mapped non-exclusively).
++ * Stage 5A read a baseline of the seven offsets Apple's own recovered
++ * `apcie-config-tunables`/`dbi-overrides` records touch, confirming
++ * every offset is live and non-faulting. Stage 5B independently
++ * recovered and hardware-confirmed the DBI write-enable gate's real
++ * address: not a register in the per-port controller window at all, but
++ * an ECAM-relative access through Apple's separate configRead32/
++ * configWrite32 accessor (`cfg->win + 0x88bc` for port 1's gate) -- see
++ * research/t7000-pcie-hardware-findings.md's "Vtable slots 0x5e0/0x5e8
++ * resolved" and "Stage 5B hardware result" sections.
+  *
++ * Stage 5C applies the actual ADT-recovered records, in Apple's own
++ * confirmed order: `dbi-overrides` first (gate set to `saved|1`, three
++ * records applied through the ECAM window, gate restored to `saved`),
++ * then `apcie-config-tunables` through the already-mapped direct
++ * port-controller window. No MSI or firmware work -- out of scope for
++ * this experiment, same as every prior stage.
++ *
+  * Motivation (docs/plans/2026-09-13-j81-wifi-pcie.md's "Next is
+  * research, not a blind retry" section, research/t7000-pcie-hardware-
+  * findings.md's "What the no-endpoint result rules out" section):
+@@ -18,23 +28,10 @@
+  * whole staged sequence is safe end to end, but no downstream BCM4350
+  * endpoint enumerated -- not after the existing 100ms post-PERST delay,
+  * not after a manual rescan, not after a second rescan ~5s later. A
+- * longer delay is therefore not a credible fix on its own. The captured
+- * J81 ADT supplies the exact controller records Apple's own driver
+- * applies through this same window (`apcie-config-tunables`/
+- * `dbi-overrides`, 12-byte `(offset, clear-mask, set-value)` triples),
+- * with DBI write-enable toggled at offset `0x0bc` around the writes.
++ * longer delay is therefore not a credible fix on its own; these
++ * records are Apple's own next step in `enableGated()`, applied before
++ * enumeration.
+  *
+- * This stage performs NO new writes -- only reads, following this
+- * project's own read-before-write discipline at every register region
+- * touched so far (shared window, ECAM, the per-port controller window
+- * itself in Stage 4a). It logs the seven offsets Apple's own recovered
+- * records touch (`0x024`, `0x07c`, `0x090`, `0x0bc`, `0x130`, `0x134`,
+- * `0xb44`) as a before-state baseline for the later RMW stage (Stage
+- * 5B, gated on resolving the remaining question of whether
+- * `dbi-overrides` precede or follow `apcie-config-tunables` and whether
+- * either is conditional on a discovered PCI capability -- not yet
+- * answered, so no write is attempted here).
+- *
+  * Everything else is unchanged from Stage 4b v2 -- see that patch's own
+  * header comment for the mapping-fix history, and `0033`'s for the
+  * enable-sequence evidence trail.
+@@ -102,6 +99,36 @@
+ #define T7000_PCIE_DBI_GATE_SELECTOR		0x08000800
+ #define T7000_PCIE_DBI_GATE_ECAM_OFFSET	0x88bc
+ 
++/*
++ * ADT-recovered apcie-config-tunables/dbi-overrides records for port 1,
++ * decoded from the real J81 ADT (research/t7000-pcie-hardware-
++ * findings.md's controller-records table). Each is a little-endian
++ * (offset, clear-mask, set-value) triple; Apple's own helper computes
++ * new = (old & ~clear-mask) | set-value. dbi-overrides offsets are
++ * already the resolved ECAM addresses (0x8024/0x807c/0x8b44), following
++ * the confirmed configRead32/configWrite32 address formula -- see
++ * research/t7000-pcie-hardware-findings.md's "Vtable slots 0x5e0/0x5e8
++ * resolved" section. apcie-config-tunables reuses the already-mapped
++ * direct port-controller window (T7000_PCIE_TUNE_CONFIG_A/B/C above).
++ */
++struct t7000_pcie_rmw_record {
++	u32 offset;
++	u32 clear_mask;
++	u32 set_value;
++};
++
++static const struct t7000_pcie_rmw_record t7000_pcie_dbi_overrides[3] = {
++	{ 0x8024, 0x00000001, 0x00000001 },
++	{ 0x807c, 0x00000400, 0x00000000 },
++	{ 0x8b44, 0x00000003, 0x00000002 },
++};
++
++static const struct t7000_pcie_rmw_record t7000_pcie_config_tunables[3] = {
++	{ T7000_PCIE_TUNE_CONFIG_A, 0x000000ff, 0x00000028 },
++	{ T7000_PCIE_TUNE_CONFIG_B, 0x00000003, 0x00000003 },
++	{ T7000_PCIE_TUNE_CONFIG_C, 0x00000001, 0x00000001 },
++};
++
+ /* Board port 1 is J81's only populated port; this driver never touches
+  * ports 2-4.
+  */
+@@ -254,7 +281,8 @@
+ 		 readl(ctrl + T7000_PCIE_TUNE_DBI_C));
+ }
+ 
+-static int t7000_pcie_start_link(struct device *dev, int port)
++static int t7000_pcie_start_link(struct device *dev, int port,
++				  void __iomem **ctrl_out)
+ {
+ 	void __iomem *ctrl;
+ 	int ret;
+@@ -282,10 +310,69 @@
+ 
+ 	t7000_pcie_log_tuning_baseline(dev, ctrl, port);
+ 
++	*ctrl_out = ctrl;
+ 	return 0;
+ }
+ 
++static void t7000_pcie_rmw(struct device *dev, void __iomem *base,
++			    const char *label, u32 offset, u32 clear_mask,
++			    u32 set_value)
++{
++	u32 old = readl(base + offset);
++
++	writel((old & ~clear_mask) | set_value, base + offset);
++	dev_info(dev,
++		 "t7000-pcie dbi-write-test: %s 0x%05x: 0x%08x -> 0x%08x\n",
++		 label, offset, old, readl(base + offset));
++}
++
+ /*
++ * Stage 5C: the actual gated RMW, following Apple's own confirmed order
++ * (research/t7000-pcie-hardware-findings.md's "Real PCIe host-controller
++ * driver, Stage 4b" section onward): dbi-overrides first, gated by
++ * saving the DBI control register, setting its low bit, applying the
++ * three records, then restoring the saved value -- then
++ * apcie-config-tunables through the direct port-controller window. No
++ * MSI or firmware work -- out of scope for this experiment, same as
++ * every prior stage.
++ */
++static void t7000_pcie_apply_dbi_overrides(struct device *dev,
++					    struct pci_config_window *cfg)
++{
++	u32 saved;
++	int i;
++
++	saved = readl(cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET);
++	dev_info(dev,
++		 "t7000-pcie dbi-write-test: dbi gate saved=0x%08x, setting saved|1\n",
++		 saved);
++	writel(saved | 1, cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET);
++
++	for (i = 0; i < 3; i++)
++		t7000_pcie_rmw(dev, cfg->win, "dbi-override",
++			       t7000_pcie_dbi_overrides[i].offset,
++			       t7000_pcie_dbi_overrides[i].clear_mask,
++			       t7000_pcie_dbi_overrides[i].set_value);
++
++	writel(saved, cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET);
++	dev_info(dev,
++		 "t7000-pcie dbi-write-test: dbi gate restored to 0x%08x (readback 0x%08x)\n",
++		 saved, readl(cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET));
++}
++
++static void t7000_pcie_apply_config_tunables(struct device *dev,
++					      void __iomem *ctrl)
++{
++	int i;
++
++	for (i = 0; i < 3; i++)
++		t7000_pcie_rmw(dev, ctrl, "config-tunable",
++			       t7000_pcie_config_tunables[i].offset,
++			       t7000_pcie_config_tunables[i].clear_mask,
++			       t7000_pcie_config_tunables[i].set_value);
++}
++
++/*
+  * Stage 5B mapping gate: read the DBI write-enable control through the
+  * already-mapped generic ECAM window. Apple builds this address with its
+  * configRead32 accessor. This is intentionally read only: the saved|1
+@@ -306,6 +393,7 @@
+ 	struct device *dev = cfg->parent;
+ 	struct pci_host_bridge *bridge = platform_get_drvdata(to_platform_device(dev));
+ 	void __iomem *shared;
++	void __iomem *ctrl;
+ 	int ret;
+ 
+ 	dev_info(dev, "t7000-pcie tuning-baseline-test: init entry\n");
+@@ -325,14 +413,17 @@
+ 
+ 	t7000_pcie_deassert_perst(dev, bridge);
+ 
+-	ret = t7000_pcie_start_link(dev, T7000_PCIE_TEST_PORT);
++	ret = t7000_pcie_start_link(dev, T7000_PCIE_TEST_PORT, &ctrl);
+ 	if (ret)
+ 		return ret;
+ 
+ 	t7000_pcie_log_dbi_gate(dev, cfg);
+ 
+-	dev_info(dev, "t7000-pcie tuning-baseline-test: init complete, handing back to generic ECAM core for bus enumeration\n");
++	t7000_pcie_apply_dbi_overrides(dev, cfg);
++	t7000_pcie_apply_config_tunables(dev, ctrl);
+ 
++	dev_info(dev, "t7000-pcie dbi-write-test: init complete, handing back to generic ECAM core for bus enumeration\n");
++
+ 	return 0;
+ }
+ 
+@@ -380,5 +471,5 @@
+ };
+ module_platform_driver(apple_t7000_pcie_driver);
+ 
+-MODULE_DESCRIPTION("Apple T7000 PCIe port-1 full recovered enable sequence plus read-only controller-tuning baseline (Stage 5A, no new writes)");
++MODULE_DESCRIPTION("Apple T7000 PCIe port-1 full recovered enable sequence plus dbi-overrides/apcie-config-tunables RMW (Stage 5C)");
+ MODULE_LICENSE("GPL");

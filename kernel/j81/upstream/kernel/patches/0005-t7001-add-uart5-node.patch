@@ -1,0 +1,55 @@
+--- a/arch/arm64/boot/dts/apple/t7001.dtsi	2026-09-08 17:03:49
++++ b/arch/arm64/boot/dts/apple/t7001.dtsi	2026-09-08 17:04:20
+@@ -172,6 +172,28 @@
+ 			status = "disabled";
+ 		};
+ 
++		/*
++		 * Battery gauge transport (BQ2754x-family HDQ over a single
++		 * bit-banged UART pin). Register base, IRQ 163 and clock
++		 * gate 0x55 confirmed against the real J81 ADT capture, same
++		 * method as serial3 above -- see
++		 * docs/plans/2026-09-08-j81-bluetooth-battery-adt.md and
++		 * research/j81-battery-hdq.md. No flow control: HDQ is a
++		 * single wire, not RTS/CTS.
++		 */
++		serial5: serial@20a0d4000 {
++			compatible = "apple,s5l-uart";
++			reg = <0x2 0x0a0d4000 0x0 0x4000>;
++			reg-io-width = <4>;
++			interrupt-parent = <&aic>;
++			interrupts = <AIC_IRQ 163 IRQ_TYPE_LEVEL_HIGH>;
++			/* Use the bootloader-enabled clocks for now. */
++			clocks = <&clkref>, <&clkref>;
++			clock-names = "uart", "clk_uart_baud0";
++			power-domains = <&ps_uart5>;
++			status = "disabled";
++		};
++
+ 		i2c0: i2c@20a110000 {
+ 			compatible = "apple,t7000-i2c", "apple,i2c";
+ 			reg = <0x2 0x0a110000 0x0 0x1000>;
+@@ -370,6 +392,23 @@
+ 				pinmux = <APPLE_PINMUX(14, 2)>,
+ 					 <APPLE_PINMUX(32, 2)>;
+ 			};
++
++			/*
++			 * AP GPIO 34, function 1 (UART5 TX/HDQ): the gauge's
++			 * function-battery_swi OIPG descriptor in the real
++			 * J81 ADT is byte-identical to UART5's own
++			 * function-tx, independently confirming HDQ rides
++			 * UART5 TX on this single pin. Hardware testing proved
++			 * that Apple's OIPG flags word is not the pin-function
++			 * selector: function 2 leaves the pad high, while function
++			 * 1 identifies the BQ27545 and returns stable measurements.
++			 * See research/j81-battery-hdq.md.
++			 * "BT-1 result" (the same decode pass covered both
++			 * UART3 and this pin).
++			 */
++			uart5_pins: uart5-pins {
++				pinmux = <APPLE_PINMUX(34, 1)>;
++			};
+ 		};
+ 	};
+ 

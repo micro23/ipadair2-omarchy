@@ -1,0 +1,21 @@
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi	2026-09-09 15:53:30
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi	2026-09-09 15:54:07
+@@ -131,6 +131,18 @@
+ 	};
+ };
+ 
++/*
++ * TOUCH-1: enable the SPI3 controller only. No touch child node yet --
++ * docs/plans/2026-09-09-j81-touch-spi3.md's "Open research" section
++ * lists what's still needed (the touch child's own packed multi-word
++ * ADT `reg`, the new "Lump"/"KLCT" resource-descriptor formats for its
++ * analog-power and clock-enable properties) before that can be written
++ * from real evidence instead of a guess.
++ */
++&spi3 {
++	status = "okay";
++};
++
+ &i2c0 {
+ 	status = "okay";
+ 

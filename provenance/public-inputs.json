@@ -1,0 +1,84 @@
+{
+  "linux": {
+    "url": "https://github.com/HoolockLinux/linux/archive/6831bc701a6ce059e71e5aaa9488c9195bea6927.tar.gz",
+    "revision": "6831bc701a6ce059e71e5aaa9488c9195bea6927",
+    "sha256": "5eca8c1a096009ef867451d08433735ff29548220adb880f85b9840de65bf15f"
+  },
+  "j81_driver_work": {
+    "url": "https://github.com/mattonik/ipad-nixos",
+    "revision": "b94d42f78e04c5465e290340a5b6879bbc5956b6"
+  },
+  "pongo": {
+    "url": "https://raw.githubusercontent.com/HoolockLinux/docs/23ebe1fbc375599221553a7e1815e5de182a6b42/binaries/Pongo.bin",
+    "bytes": 238096,
+    "sha256": "1e5543fd8e6dbd84c334b87d71aa473f4d347c2ba8a5e863b6e10f18461c7575",
+    "usb_version": "PongoOS-2.6.3-bb492b00",
+    "provenance_limit": "Prebuilt qualified input; its matching compiler build was not reconstructed."
+  },
+  "m1n1": {
+    "source_url": "https://github.com/HoolockLinux/m1n1",
+    "source_revision": "d5a10ac52a6468484854419a6c5130f1d62073eb",
+    "build_run": "https://github.com/HoolockLinux/m1n1/actions/runs/33380676898",
+    "artifact_url": "https://nightly.link/hoolocklinux/m1n1/actions/runs/33380676898/m1n1.zip",
+    "bytes": 1196032,
+    "sha256": "2e377fb72a8555c944bf30e08f1604cc2b889678250df34ca2d61d0dda8fb0a1",
+    "provenance_limit": "Hash applies to m1n1.bin inside the CI artifact, not its ZIP. Artifact retention is controlled by upstream; do not substitute another build silently.",
+    "artifact_zip_bytes": 785924,
+    "artifact_zip_sha256": "b92c7a15c8c7c6720eedd9e7021ac6ffb5ff0e15d62afddb45897ec705496867",
+    "artifact_verified_utc": "2026-10-27",
+    "artifact_expires_utc": "2026-11-29"
+  },
+  "debug_userspace": {
+    "url": "https://raw.githubusercontent.com/SoMainline/linux-apple-resources/30780ec0fecdab849bb812e1dde52b87e614f45b/debug_initrd.img",
+    "sha256": "af3fc3c7c57c775095fea2df7930961c92f73ec95f64d4c7ef6cae9c02dee9c6",
+    "retained_files": [
+      "bin/busybox",
+      "bin/busybox-extras",
+      "lib/ld-musl-aarch64.so.1",
+      "lib/libc.musl-aarch64.so.1"
+    ]
+  },
+  "palera1n": {
+    "url": "https://github.com/palera1n/palera1n/releases/download/v2.4/palera1n-macos-arm64",
+    "bytes": 4874592,
+    "sha256": "950c357b6ae5df36128f6e42a3c6d371e55aeb69a5afcde276f096276210d0c9"
+  },
+  "omarchy_a_userspace": {
+    "url": "https://github.com/OrchardLinux/omarchy-a/releases/download/v0.1.0/rootfs.tar.zst",
+    "revision": "56e123a2c708c589f463d5262c36f28ddf2d9b2b",
+    "bytes": 1096228981,
+    "sha256": "8ff6897909d2fa3d894f7c87264e223000649f6be513414b9a0fef307adf3e46",
+    "scope": "Source of selected AArch64 tools and separately qualified desktop; not part of the hardware contribution."
+  },
+  "regulatory": {
+    "source_url": "https://www.kernel.org/pub/software/network/wireless-regdb/wireless-regdb-2025.10.07.tar.xz",
+    "source_sha256": "d4c872a44154604c869f5851f7d21d818d492835d370af7f58de8847973801c3",
+    "files": {
+      "regulatory.db": {
+        "bytes": 6328,
+        "sha256": "5560f4f0fdac7d1bb2adf8d4d083f39e3bee5ba55192feadadc091df55a813eb"
+      },
+      "regulatory.db.p7s": {
+        "bytes": 1085,
+        "sha256": "5dd27969661bed1e021ce435f535a53f201705bda14c2dba0db6353d1cdc6fff"
+      },
+      "LICENSE": {
+        "bytes": 880,
+        "sha256": "678b0df753c86198fc496d1f1033429bbd57f101472132ee7eaaf9f5e0a7fae1"
+      }
+    },
+    "verification": "Database and detached signature match the upstream release; CMS signature verified against the exact Linux built-in wens certificate. Kernel signature enforcement remains enabled.",
+    "destination_directory": "lib/firmware"
+  },
+  "iw": {
+    "url": "https://www.kernel.org/pub/software/network/iw/iw-6.17.tar.xz",
+    "bytes": 163756,
+    "sha256": "7d182e498289ab39b257da6780d562e415377107f50358ee5b55b8cfe40b1e33",
+    "version": "6.17"
+  },
+  "qualified_wifi_tools_archive": {
+    "bytes": 10062422,
+    "sha256": "7bbec181bc85c85be4d2e22c8492899592d0399300235ab95dafb6e40e888682",
+    "scope": "Result identity only; archive is not redistributed or hosted by this repository. See runtime/j81/tools-source for the original build/packaging logic."
+  }
+}

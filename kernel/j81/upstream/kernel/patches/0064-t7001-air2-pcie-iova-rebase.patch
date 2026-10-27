@@ -1,0 +1,43 @@
+diff --git a/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml b/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
+--- a/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
++++ b/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
+@@ -56,6 +56,14 @@
+       Apple DART uses it as the DMA aperture of every PCI device behind the controller.
+       When absent no window is enforced.
+ 
++  apple,iova-rebase:
++    type: boolean
++    description: |
++      Use Apple's rebased PTE indexing for the `apple,iova-window` DMA window: the DART page
++      index is the IOVA minus the window start, so the first window page is DART page 0.
++      Without it the raw (un-rebased) indexing is used inside the same window. Only
++      meaningful together with `apple,iova-window`.
++
+ additionalProperties: true
+ 
+ examples:
+@@ -65,6 +73,7 @@
+       apple,reg-on-pmic = <&d2207>;
+       apple,msi-doorbell = <0x0 0xbffff000>;
+       apple,iova-window = <0x0 0x80000000 0x0 0xbffff000>;
++      apple,iova-rebase;
+       msi-controller;
+       msi-parent = <&pcie>;
+       msi-ranges = <&aic AIC_IRQ 224 IRQ_TYPE_EDGE_RISING 32>;
+diff --git a/arch/arm64/boot/dts/apple/t7001-air2.dtsi b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -206,6 +206,13 @@
+ 	apple,iova-window = <0x0 0x80000000 0x0 0xbffff000>;
+ 
+ 	/*
++	 * Apple's PTE indexing: IOVAs are rebased to the window start (endpoint-visible 0x80000000
++	 * is DART page 0). Without this property the raw indexing is used inside the same window.
++	 * TEST selection between the two models; see research/2026-10-06-pcie-msi-delivery-review.md.
++	 */
++	apple,iova-rebase;
++
++	/*
+ 	 * The controller's 32 hardware MSI vectors are AIC lines 224..255 (ADT
+ 	 * `msi-vector-offset` 224, `#msi-vectors` 32; the AIC reports 256 IRQs). Port 1 owns
+ 	 * vectors 8..15. These three properties are declared together with the driver's

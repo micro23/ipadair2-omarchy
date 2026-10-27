@@ -1,0 +1,20 @@
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -1275,10 +1275,14 @@
+ 	else
+ 		fault_name = "unknown";
+ 
++	/*
++	 * Patch 0086: cfg is the master config of an attached device. The DART's own device (which is what the interrupt handler gets) has none, so
++	 * the old `cfg->dma_min` read was a NULL dereference (run 33). Log the raw address too; it is the DART-relative address as reported by the hardware.
++	 */
+ 	dev_err_ratelimited(
+ 		dart->dev,
+-		"translation fault: status:0x%x stream:%d code:0x%x (%s) at 0x%llx",
+-		error, stream_idx, error_code, fault_name, addr | cfg->dma_min);
++		"translation fault: status:0x%x stream:%d code:0x%x (%s) at 0x%llx (raw error address 0x%08x)",
++		error, stream_idx, error_code, fault_name, addr | (cfg ? cfg->dma_min : 0), addr);
+ 
+ 	writel(error, dart->regs + DART_S5L8960X_ERROR);
+ 	return IRQ_HANDLED;

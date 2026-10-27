@@ -1,0 +1,7 @@
+linux_url=https://github.com/HoolockLinux/linux.git
+linux_commit=6831bc701a6ce059e71e5aaa9488c9195bea6927
+linux_archive_sha256=5eca8c1a096009ef867451d08433735ff29548220adb880f85b9840de65bf15f
+j81_patch_url=https://github.com/mattonik/ipad-nixos.git
+j81_patch_commit=b94d42f78e04c5465e290340a5b6879bbc5956b6
+m1n1_url=https://github.com/HoolockLinux/m1n1.git
+m1n1_commit=d5a10ac52a6468484854419a6c5130f1d62073eb

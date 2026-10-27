@@ -1,0 +1,42 @@
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi	2026-09-08 17:03:49
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi	2026-09-08 17:04:43
+@@ -98,6 +98,39 @@
+ 	uart-has-rtscts;
+ };
+ 
++/*
++ * BAT-3: describes and enables UART5, the BQ2754x-family battery gauge's
++ * bit-banged HDQ transport. See
++ * docs/plans/2026-09-08-j81-bluetooth-battery-adt.md and
++ * research/j81-battery-hdq.md's "BAT-3".
++ *
++ * No uart-has-rtscts: HDQ is single-wire, there is no flow control to
++ * describe. The gauge is added directly as a serdev child (unlike
++ * serial3, which deliberately shipped without one first) -- the serdev
++ * correction found while researching this board applies identically to
++ * this UART, and BAT-2's driver needs a real serdev_device to bind to;
++ * there is no separate manual-attach diagnostic step for this transport
++ * the way btattach was for Bluetooth.
++ */
++&serial5 {
++	status = "okay";
++	pinctrl-0 = <&uart5_pins>;
++	pinctrl-names = "default";
++
++	gauge {
++		/*
++		 * Provisional development compatible tied to this board's
++		 * ADT evidence (gas-gauge,bq27540 / gas-gauge,hdq hints);
++		 * matched by BAT-2's drivers/power/supply/
++		 * bq27xxx_battery_hdq_uart.c, which resolves the actual
++		 * chip variant (BQ27541 vs BQ27545 vs unknown) from a live
++		 * DEVICE_TYPE readback rather than trusting this string --
++		 * see that driver's hdq_uart_identify().
++		 */
++		compatible = "ti,bq27540-hdq-uart";
++	};
++};
++
+ &i2c0 {
+ 	status = "okay";
+ 

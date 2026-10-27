@@ -1,0 +1,68 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -2886,6 +2886,29 @@
+ static inline bool h1b_hold_device(void) { return false; }
+ #endif
+ 
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++/*
++ * Test only (patch 0078): brcmfmac.h1b_step_s=N pauses N seconds between the phases of brcmf_pcie_setup (firmware running, ring buffers,
++ * scratch buffers, interrupt, before attach) and says so in the log. With the firmware's Wi-Fi core attached the machine resets 100-200 ms after the
++ * firmware starts (runs 15-21); the pauses show whether it dies on its own while the host is idle, or at which host step.
++ * The host does nothing to the device during a pause (the console poll, if any, is the only access).
++ */
++static unsigned int h1b_step_s;
++module_param_named(h1b_step_s, h1b_step_s, uint, 0444);
++MODULE_PARM_DESC(h1b_step_s, "J81 test: pause this many seconds between the phases of brcmf_pcie_setup (0 = no pauses)");
++
++static void h1b_step(struct brcmf_pciedev_info *devinfo, const char *what)
++{
++	if (!h1b_step_s)
++		return;
++	dev_info(&devinfo->pdev->dev, "t7000-h1b: step: %s done, pausing %u s\n", what, h1b_step_s);
++	ssleep(h1b_step_s);
++	dev_info(&devinfo->pdev->dev, "t7000-h1b: step: pause after %s over\n", what);
++}
++#else
++static inline void h1b_step(struct brcmf_pciedev_info *devinfo, const char *what) { }
++#endif
++
+ static void brcmf_pcie_setup(struct device *dev, int ret,
+ 			     struct brcmf_fw_request *fwreq)
+ {
+@@ -2933,21 +2956,25 @@
+ 	ret = brcmf_pcie_download_fw_nvram(devinfo, fw, nvram, nvram_len);
+ 	if (ret)
+ 		goto fail;
++	h1b_step(devinfo, "firmware download and start");
+ 
+ 	devinfo->state = BRCMFMAC_PCIE_STATE_UP;
+ 
+ 	ret = brcmf_pcie_init_ringbuffers(devinfo);
+ 	if (ret)
+ 		goto fail;
++	h1b_step(devinfo, "ring buffers");
+ 
+ 	ret = brcmf_pcie_init_scratchbuffers(devinfo);
+ 	if (ret)
+ 		goto fail;
++	h1b_step(devinfo, "scratch buffers");
+ 
+ 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
+ 	ret = brcmf_pcie_request_irq(devinfo);
+ 	if (ret)
+ 		goto fail;
++	h1b_step(devinfo, "interrupt request");
+ 
+ 	/* hook the commonrings in the bus structure. */
+ 	for (i = 0; i < BRCMF_NROF_COMMON_MSGRINGS; i++)
+@@ -2967,6 +2994,8 @@
+ 	bus->msgbuf->max_flowrings = devinfo->shared.max_flowrings;
+ 
+ 	init_waitqueue_head(&devinfo->mbdata_resp_wait);
++
++	h1b_step(devinfo, "msgbuf hookup, before attach");
+ 
+ 	ret = brcmf_attach(&devinfo->pdev->dev);
+ 	if (ret)

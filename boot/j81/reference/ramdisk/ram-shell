@@ -1,0 +1,6 @@
+#!/bin/sh
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PS1='j81-ram# '
+cd / || exit 1
+cat /etc/issue
+exec /bin/sh -i

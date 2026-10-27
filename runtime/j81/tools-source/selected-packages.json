@@ -1,0 +1,1111 @@
+[
+  {
+    "directory": "brotli-1.2.1-1",
+    "fields": {
+      "NAME": [
+        "brotli"
+      ],
+      "VERSION": [
+        "1.2.1-1"
+      ],
+      "BASE": [
+        "brotli"
+      ],
+      "DESC": [
+        "Generic-purpose lossless compression algorithm"
+      ],
+      "URL": [
+        "https://github.com/google/brotli"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1792756874"
+      ],
+      "INSTALLDATE": [
+        "1792939887"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+n1@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "1258669"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "MIT"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc"
+      ],
+      "PROVIDES": [
+        "libbrotlicommon.so=1-64",
+        "libbrotlidec.so=1-64",
+        "libbrotlienc.so=1-64"
+      ],
+      "XDATA": [
+        "pkgtype=split"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libbrotlicommon.so.1.2.1",
+      "usr/lib/libbrotlidec.so.1.2.1",
+      "usr/lib/libbrotlienc.so.1.2.1"
+    ]
+  },
+  {
+    "directory": "dbus-1.16.2-2",
+    "fields": {
+      "NAME": [
+        "dbus"
+      ],
+      "VERSION": [
+        "1.16.2-2"
+      ],
+      "BASE": [
+        "dbus"
+      ],
+      "DESC": [
+        "Freedesktop.org message bus system"
+      ],
+      "URL": [
+        "https://www.freedesktop.org/wiki/Software/dbus/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1792452901"
+      ],
+      "INSTALLDATE": [
+        "1792939891"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+n1@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "1477687"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "AFL-2.1 OR GPL-2.0-or-later"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "REPLACES": [
+        "libdbus"
+      ],
+      "DEPENDS": [
+        "audit",
+        "expat",
+        "glibc",
+        "libcap-ng",
+        "systemd-libs",
+        "libaudit.so=1-64",
+        "libcap-ng.so=0-64",
+        "libexpat.so=1-64",
+        "libsystemd.so=0-64"
+      ],
+      "CONFLICTS": [
+        "libdbus"
+      ],
+      "PROVIDES": [
+        "libdbus",
+        "libdbus-1.so=3-64"
+      ],
+      "XDATA": [
+        "pkgtype=split"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libdbus-1.so.3.38.3"
+    ]
+  },
+  {
+    "directory": "glibc-2.43+r22+g8362e8ce10b2-2",
+    "fields": {
+      "NAME": [
+        "glibc"
+      ],
+      "VERSION": [
+        "2.43+r22+g8362e8ce10b2-2"
+      ],
+      "BASE": [
+        "glibc"
+      ],
+      "DESC": [
+        "GNU C Library"
+      ],
+      "URL": [
+        "https://www.gnu.org/software/libc"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1777809590"
+      ],
+      "INSTALLDATE": [
+        "1792939886"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+seattle@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "60014558"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "GPL-2.0-or-later",
+        "LGPL-2.1-or-later"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "linux-api-headers>=4.10",
+        "tzdata",
+        "filesystem"
+      ],
+      "OPTDEPENDS": [
+        "gd: for memusagestat",
+        "perl: for mtrace"
+      ],
+      "XDATA": [
+        "pkgtype=split"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/ld-linux-aarch64.so.1",
+      "usr/lib/libc.so.6",
+      "usr/lib/libm.so.6"
+    ]
+  },
+  {
+    "directory": "gmp-6.3.0-3",
+    "fields": {
+      "NAME": [
+        "gmp"
+      ],
+      "VERSION": [
+        "6.3.0-3"
+      ],
+      "BASE": [
+        "gmp"
+      ],
+      "DESC": [
+        "A free library for arbitrary precision arithmetic"
+      ],
+      "URL": [
+        "https://gmplib.org/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1771449574"
+      ],
+      "INSTALLDATE": [
+        "1792939887"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+seattle@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "946243"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "GPL-2.0-or-later",
+        "LGPL-3.0-or-later"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "libgcc",
+        "libstdc++",
+        "glibc"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libgmp.so.10.5.0"
+    ]
+  },
+  {
+    "directory": "jansson-2.15.1-1",
+    "fields": {
+      "NAME": [
+        "jansson"
+      ],
+      "VERSION": [
+        "2.15.1-1"
+      ],
+      "BASE": [
+        "jansson"
+      ],
+      "DESC": [
+        "C library for encoding, decoding and manipulating JSON data"
+      ],
+      "URL": [
+        "https://www.digip.org/jansson/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1787435648"
+      ],
+      "INSTALLDATE": [
+        "1792939892"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+n1@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "337723"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "MIT"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libjansson.so.4.15.1"
+    ]
+  },
+  {
+    "directory": "libgcc-16.1.1+r12+g301eb08fa2c5-1",
+    "fields": {
+      "NAME": [
+        "libgcc"
+      ],
+      "VERSION": [
+        "16.1.1+r12+g301eb08fa2c5-1"
+      ],
+      "BASE": [
+        "gcc"
+      ],
+      "DESC": [
+        "Low-level runtime library shipped by GCC"
+      ],
+      "URL": [
+        "https://gcc.gnu.org"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1777811145"
+      ],
+      "INSTALLDATE": [
+        "1792939886"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+seattle@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "136916"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "GPL-3.0-or-later WITH GCC-exception-3.1",
+        "GFDL-1.3-or-later"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc>=2.27"
+      ],
+      "PROVIDES": [
+        "libgcc_s.so=1-64"
+      ],
+      "XDATA": [
+        "pkgtype=split"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libgcc_s.so.1"
+    ]
+  },
+  {
+    "directory": "libmnl-1.0.5-2",
+    "fields": {
+      "NAME": [
+        "libmnl"
+      ],
+      "VERSION": [
+        "1.0.5-2"
+      ],
+      "BASE": [
+        "libmnl"
+      ],
+      "DESC": [
+        "Minimalistic user-space library oriented to Netlink developers."
+      ],
+      "URL": [
+        "https://www.netfilter.org/projects/libmnl/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1710830154"
+      ],
+      "INSTALLDATE": [
+        "1792939893"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+seattle@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "30820"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "LGPL2.1"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libmnl.so.0.2.0"
+    ]
+  },
+  {
+    "directory": "libnftnl-1.3.2-1",
+    "fields": {
+      "NAME": [
+        "libnftnl"
+      ],
+      "VERSION": [
+        "1.3.2-1"
+      ],
+      "BASE": [
+        "libnftnl"
+      ],
+      "DESC": [
+        "Netfilter library providing interface to the nf_tables subsystem"
+      ],
+      "URL": [
+        "https://netfilter.org/projects/libnftnl/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1788429360"
+      ],
+      "INSTALLDATE": [
+        "1792939893"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+n0@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "319523"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "GPL-2.0-or-later"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc",
+        "libmnl"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libnftnl.so.11.8.0"
+    ]
+  },
+  {
+    "directory": "libnl-3.12.0-1",
+    "fields": {
+      "NAME": [
+        "libnl"
+      ],
+      "VERSION": [
+        "3.12.0-1"
+      ],
+      "BASE": [
+        "libnl"
+      ],
+      "DESC": [
+        "Library for applications dealing with netlink sockets"
+      ],
+      "URL": [
+        "https://github.com/thom311/libnl/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1765149842"
+      ],
+      "INSTALLDATE": [
+        "1792939893"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+n0@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "5654805"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "LGPL-2.1-only"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc",
+        "gcc-libs"
+      ],
+      "PROVIDES": [
+        "libnl-3.so=200-64",
+        "libnl-cli-3.so=200-64",
+        "libnl-genl-3.so=200-64",
+        "libnl-idiag-3.so=200-64",
+        "libnl-nf-3.so=200-64",
+        "libnl-route-3.so=200-64",
+        "libnl-xfrm-3.so=200-64"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libnl-3.so.200.26.0",
+      "usr/lib/libnl-genl-3.so.200.26.0",
+      "usr/lib/libnl-route-3.so.200.26.0"
+    ]
+  },
+  {
+    "directory": "ncurses-6.6-2",
+    "fields": {
+      "NAME": [
+        "ncurses"
+      ],
+      "VERSION": [
+        "6.6-2"
+      ],
+      "BASE": [
+        "ncurses"
+      ],
+      "DESC": [
+        "System V Release 4.0 curses emulation library"
+      ],
+      "URL": [
+        "https://invisible-island.net/ncurses/ncurses.html"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1774198591"
+      ],
+      "INSTALLDATE": [
+        "1792939887"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+seattle@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "6495475"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "MIT-open-group"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "REPLACES": [
+        "alacritty-terminfo",
+        "rio-terminfo",
+        "wezterm-terminfo"
+      ],
+      "DEPENDS": [
+        "glibc",
+        "libgcc",
+        "libstdc++"
+      ],
+      "OPTDEPENDS": [
+        "bash: for ncursesw6-config"
+      ],
+      "PROVIDES": [
+        "libncurses++w.so=6-64",
+        "libformw.so=6-64",
+        "libmenuw.so=6-64",
+        "libpanelw.so=6-64",
+        "libncursesw.so=6-64"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libncursesw.so.6.6"
+    ]
+  },
+  {
+    "directory": "nftables-1:1.1.7-3",
+    "fields": {
+      "NAME": [
+        "nftables"
+      ],
+      "VERSION": [
+        "1:1.1.7-3"
+      ],
+      "BASE": [
+        "nftables"
+      ],
+      "DESC": [
+        "Netfilter tables userspace tools"
+      ],
+      "URL": [
+        "https://netfilter.org/projects/nftables/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1788439638"
+      ],
+      "INSTALLDATE": [
+        "1792939893"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+n1@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "1375156"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "GPL-2.0-only"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc",
+        "gmp",
+        "jansson",
+        "libmnl",
+        "libnftnl",
+        "readline"
+      ],
+      "OPTDEPENDS": [
+        "python: Python bindings",
+        "python-jsonschema: Python bindings"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/bin/nft",
+      "usr/lib/libnftables.so.1.1.0"
+    ]
+  },
+  {
+    "directory": "openssl-3.6.5-1",
+    "fields": {
+      "NAME": [
+        "openssl"
+      ],
+      "VERSION": [
+        "3.6.5-1"
+      ],
+      "BASE": [
+        "openssl"
+      ],
+      "DESC": [
+        "The Open Source toolkit for cryptography and Transport Layer Security"
+      ],
+      "URL": [
+        "https://www.openssl.org"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1790794945"
+      ],
+      "INSTALLDATE": [
+        "1792939888"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+seattle@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "14018510"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "Apache-2.0"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "REPLACES": [
+        "openssl-perl",
+        "openssl-doc"
+      ],
+      "DEPENDS": [
+        "brotli",
+        "glibc",
+        "zlib",
+        "zstd"
+      ],
+      "OPTDEPENDS": [
+        "ca-certificates",
+        "perl"
+      ],
+      "PROVIDES": [
+        "libcrypto.so=3-64",
+        "libssl.so=3-64"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libcrypto.so.3",
+      "usr/lib/libssl.so.3"
+    ]
+  },
+  {
+    "directory": "pcsclite-2.5.3-1",
+    "fields": {
+      "NAME": [
+        "pcsclite"
+      ],
+      "VERSION": [
+        "2.5.3-1"
+      ],
+      "BASE": [
+        "pcsclite"
+      ],
+      "DESC": [
+        "PC/SC Architecture smartcard middleware library"
+      ],
+      "URL": [
+        "https://pcsclite.apdu.fr/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1792343347"
+      ],
+      "INSTALLDATE": [
+        "1792939910"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+n0@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "528252"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "BSD-3-Clause",
+        "GPL-3.0-or-later",
+        "BSD-2-Clause",
+        "0BSD"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "libsystemd.so=0-64",
+        "libudev.so=1-64",
+        "libpolkit-gobject-1.so=0-64"
+      ],
+      "OPTDEPENDS": [
+        "python: API call trace logging with the pcsc-spy",
+        "ccid: USB Chip/Smart Card Interface Devices driver"
+      ],
+      "PROVIDES": [
+        "libpcsclite.so=1-64",
+        "libpcsclite_real.so=1-64",
+        "libpcscspy.so=0-64"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libpcsclite.so.1"
+    ]
+  },
+  {
+    "directory": "readline-8.3.6-1",
+    "fields": {
+      "NAME": [
+        "readline"
+      ],
+      "VERSION": [
+        "8.3.6-1"
+      ],
+      "BASE": [
+        "readline"
+      ],
+      "DESC": [
+        "GNU readline library"
+      ],
+      "URL": [
+        "https://tiswww.case.edu/php/chet/readline/rltop.html"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1789909995"
+      ],
+      "INSTALLDATE": [
+        "1792939887"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+n1@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "1630849"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "GPL-3.0-or-later"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc",
+        "libncursesw.so=6-64",
+        "ncurses"
+      ],
+      "PROVIDES": [
+        "libhistory.so=8-64",
+        "libreadline.so=8-64"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libreadline.so.8.3"
+    ]
+  },
+  {
+    "directory": "systemd-libs-262.1-1",
+    "fields": {
+      "NAME": [
+        "systemd-libs"
+      ],
+      "VERSION": [
+        "262.1-1"
+      ],
+      "BASE": [
+        "systemd"
+      ],
+      "DESC": [
+        "systemd client libraries"
+      ],
+      "URL": [
+        "https://www.github.com/systemd/systemd"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1792340730"
+      ],
+      "INSTALLDATE": [
+        "1792939888"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+seattle@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "5316010"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "LGPL-2.1-or-later",
+        "CC0-1.0",
+        "GPL-2.0-or-later WITH Linux-syscall-note"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "REPLACES": [
+        "libsystemd"
+      ],
+      "DEPENDS": [
+        "glibc",
+        "libgcc",
+        "libgcc_s.so=1-64",
+        "libgcrypt",
+        "lz4",
+        "xz",
+        "zstd"
+      ],
+      "CONFLICTS": [
+        "libsystemd"
+      ],
+      "PROVIDES": [
+        "libsystemd",
+        "libsystemd.so=0-64",
+        "libudev.so=1-64"
+      ],
+      "XDATA": [
+        "pkgtype=split"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libsystemd.so.0.45.0"
+    ]
+  },
+  {
+    "directory": "wpa_supplicant-2:2.12-1",
+    "fields": {
+      "NAME": [
+        "wpa_supplicant"
+      ],
+      "VERSION": [
+        "2:2.12-1"
+      ],
+      "BASE": [
+        "wpa_supplicant"
+      ],
+      "DESC": [
+        "A utility providing key negotiation for WPA wireless networks"
+      ],
+      "URL": [
+        "https://w1.fi/wpa_supplicant/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1786553016"
+      ],
+      "INSTALLDATE": [
+        "1792939910"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+n1@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "9174825"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "BSD-3-Clause"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc",
+        "libdbus",
+        "libnl",
+        "openssl",
+        "pcsclite",
+        "readline"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/bin/wpa_cli",
+      "usr/bin/wpa_passphrase",
+      "usr/bin/wpa_supplicant"
+    ]
+  },
+  {
+    "directory": "zlib-1:1.3.2-4",
+    "fields": {
+      "NAME": [
+        "zlib"
+      ],
+      "VERSION": [
+        "1:1.3.2-4"
+      ],
+      "BASE": [
+        "zlib"
+      ],
+      "DESC": [
+        "Compression library implementing the deflate compression method found in gzip and PKZIP"
+      ],
+      "URL": [
+        "https://www.zlib.net/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1791916373"
+      ],
+      "INSTALLDATE": [
+        "1792939887"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+seattle@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "257244"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "Zlib"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc"
+      ],
+      "PROVIDES": [
+        "libz.so=1-64"
+      ],
+      "XDATA": [
+        "pkgtype=split"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libz.so.1.3.2"
+    ]
+  },
+  {
+    "directory": "zstd-1.5.7-3",
+    "fields": {
+      "NAME": [
+        "zstd"
+      ],
+      "VERSION": [
+        "1.5.7-3"
+      ],
+      "BASE": [
+        "zstd"
+      ],
+      "DESC": [
+        "Zstandard - Fast real-time compression algorithm"
+      ],
+      "URL": [
+        "https://facebook.github.io/zstd/"
+      ],
+      "ARCH": [
+        "aarch64"
+      ],
+      "BUILDDATE": [
+        "1771243807"
+      ],
+      "INSTALLDATE": [
+        "1792939887"
+      ],
+      "PACKAGER": [
+        "Arch Linux ARM Build System <builder+seattle@archlinuxarm.org>"
+      ],
+      "SIZE": [
+        "1631101"
+      ],
+      "REASON": [
+        "1"
+      ],
+      "LICENSE": [
+        "BSD-3-Clause",
+        "GPL-2.0-only"
+      ],
+      "VALIDATION": [
+        "pgp"
+      ],
+      "DEPENDS": [
+        "glibc",
+        "libgcc",
+        "libstdc++",
+        "zlib",
+        "xz",
+        "lz4"
+      ],
+      "PROVIDES": [
+        "libzstd.so=1-64"
+      ],
+      "XDATA": [
+        "pkgtype=pkg"
+      ]
+    },
+    "selected_files": [
+      "usr/lib/libzstd.so.1.5.7"
+    ]
+  }
+]

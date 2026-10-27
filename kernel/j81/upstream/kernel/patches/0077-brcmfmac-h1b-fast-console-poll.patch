@@ -1,0 +1,54 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -1169,8 +1169,38 @@
+ 	mod_timer(&h1b_console_timer, jiffies + msecs_to_jiffies(100));
+ }
+ 
++/*
++ * Patch 0077: brcmfmac.h1b_fast_poll_us=N (default 0 = off) polls the firmware console every N microseconds from a kernel thread for 3 s
++ * instead of every 100 ms from the timer, so the firmware's own console lines in the milliseconds between the first doorbell and a
++ * reset reach the log (run 18: the machine resets within about 40 ms of the first doorbell). Read-only TCM reads, as before.
++ */
++static unsigned int h1b_fast_poll_us;
++module_param_named(h1b_fast_poll_us, h1b_fast_poll_us, uint, 0444);
++MODULE_PARM_DESC(h1b_fast_poll_us, "J81 test: poll the firmware console every N us from a thread for 3 s (0 = use the 100 ms timer)");
++
++static struct task_struct *h1b_poll_task;
++
++static int h1b_fast_poll_fn(void *arg)
++{
++	struct brcmf_pciedev_info *devinfo = arg;
++	unsigned long end = jiffies + 3 * HZ;
++
++	while (!kthread_should_stop() && time_before(jiffies, end)) {
++		if (devinfo->state == BRCMFMAC_PCIE_STATE_UP)
++			brcmf_pcie_bus_console_read(devinfo, true);
++		usleep_range(h1b_fast_poll_us, h1b_fast_poll_us + 200);
++	}
++	return 0;
++}
++
+ static void h1b_console_poll_start(struct brcmf_pciedev_info *devinfo)
+ {
++	if (h1b_fast_poll_us) {
++		h1b_poll_task = kthread_run(h1b_fast_poll_fn, devinfo, "h1b-console");
++		if (IS_ERR(h1b_poll_task))
++			h1b_poll_task = NULL;
++		return;
++	}
+ 	h1b_poll_devinfo = devinfo;
+ 	h1b_poll_ticks = 0;
+ 	h1b_poll_started = true;
+@@ -1180,6 +1210,11 @@
+ 
+ static void h1b_console_poll_stop(void)
+ {
++	if (h1b_poll_task) {
++		kthread_stop(h1b_poll_task);
++		h1b_poll_task = NULL;
++		return;
++	}
+ 	if (!h1b_poll_started)
+ 		return;
+ 	timer_delete_sync(&h1b_console_timer);

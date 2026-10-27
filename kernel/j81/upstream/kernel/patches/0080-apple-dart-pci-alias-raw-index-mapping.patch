@@ -1,0 +1,79 @@
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -296,6 +296,7 @@
+ 
+ 	bool finalized;
+ 	u64 mask;
++	u64 alias_mask;	/* TEST (patch 0080): also map every page at the raw (un-rebased) index; 0 = off */
+ 	struct mutex init_lock;
+ 	struct apple_dart_atomic_stream_map stream_maps[MAX_DARTS_PER_DEVICE];
+ 
+@@ -656,6 +657,16 @@
+ 	return ops->iova_to_phys(ops, iova & dart_domain->mask);
+ }
+ 
++/*
++ * Test only (patch 0080): apple_dart.pci_alias=1 maps every page of a rebased (model A) PCI window domain a second time at its raw index
++ * (the IOVA itself), so a device address resolves whether the DART hardware indexes by the full address or by the address minus the window base.
++ * The two index ranges (raw 0x80000000.. and rebased 0..) cannot collide inside the window. Run 24: the first real DMA read of ring items
++ * resets the machine and neither indexing model has ever been exercised by a device DMA (MSI writes never touch the DART).
++ */
++static int apple_dart_pci_alias;
++module_param_named(pci_alias, apple_dart_pci_alias, int, 0444);
++MODULE_PARM_DESC(pci_alias, "J81 test: 1 also map PCI window pages at the raw (un-rebased) DART index");
++
+ static int apple_dart_map_pages(struct iommu_domain *domain, unsigned long iova,
+ 				phys_addr_t paddr, size_t pgsize,
+ 				size_t pgcount, int prot, gfp_t gfp,
+@@ -663,12 +674,21 @@
+ {
+ 	struct apple_dart_domain *dart_domain = to_dart_domain(domain);
+ 	struct io_pgtable_ops *ops = dart_domain->pgtbl_ops;
++	int ret;
+ 
+ 	if (!ops)
+ 		return -ENODEV;
+ 
+-	return ops->map_pages(ops, iova & dart_domain->mask, paddr, pgsize,
+-			      pgcount, prot, gfp, mapped);
++	ret = ops->map_pages(ops, iova & dart_domain->mask, paddr, pgsize,
++			     pgcount, prot, gfp, mapped);
++	if (!ret && dart_domain->alias_mask && *mapped) {
++		size_t amapped = 0;
++
++		if (ops->map_pages(ops, iova & dart_domain->alias_mask, paddr, pgsize, *mapped / pgsize, prot, gfp, &amapped) ||
++		    amapped != *mapped)
++			pr_warn_once("apple-dart: raw-index alias mapping incomplete\n");
++	}
++	return ret;
+ }
+ 
+ static size_t apple_dart_unmap_pages(struct iommu_domain *domain,
+@@ -678,9 +698,13 @@
+ {
+ 	struct apple_dart_domain *dart_domain = to_dart_domain(domain);
+ 	struct io_pgtable_ops *ops = dart_domain->pgtbl_ops;
++	size_t unmapped;
+ 
+-	return ops->unmap_pages(ops, iova & dart_domain->mask, pgsize, pgcount,
+-				gather);
++	unmapped = ops->unmap_pages(ops, iova & dart_domain->mask, pgsize, pgcount,
++				    gather);
++	if (unmapped && dart_domain->alias_mask)
++		ops->unmap_pages(ops, iova & dart_domain->alias_mask, pgsize, unmapped / pgsize, gather);
++	return unmapped;
+ }
+ 
+ static void
+@@ -763,6 +787,10 @@
+ 			goto done;
+ 		}
+ 		dart_domain->mask = ~cfg->dma_min;
++		if (apple_dart_pci_alias && cfg->pci_window) {
++			dart_domain->alias_mask = DMA_BIT_MASK(pgtbl_cfg.ias);
++			dev_info(dart->dev, "t7000-h1b: pci window pages are also mapped at the raw index (pci_alias)\n");
++		}
+ 	} else {
+ 		dart_domain->mask = DMA_BIT_MASK(pgtbl_cfg.ias);
+ 	}

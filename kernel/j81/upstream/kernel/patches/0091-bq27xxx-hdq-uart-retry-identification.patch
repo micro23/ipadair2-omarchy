@@ -1,0 +1,41 @@
+diff --git a/drivers/power/supply/bq27xxx_battery_hdq_uart.c b/drivers/power/supply/bq27xxx_battery_hdq_uart.c
+--- a/drivers/power/supply/bq27xxx_battery_hdq_uart.c
++++ b/drivers/power/supply/bq27xxx_battery_hdq_uart.c
+@@ -376,8 +376,12 @@
+ 	return 0;
+ }
+ 
++#define HDQ_IDENTIFY_ATTEMPTS	5
++#define HDQ_IDENTIFY_RETRY_MS	100
++
+ static int hdq_uart_probe(struct serdev_device *serdev)
+ {
++	int attempt;
+ 	struct device *dev = &serdev->dev;
+ 	struct hdq_uart *hdq;
+ 	int ret;
+@@ -417,9 +421,22 @@
+ 	hdq->di.bus.read = hdq_uart_read;
+ 	hdq->di.bus.write = hdq_uart_write;
+ 
+-	ret = hdq_uart_identify(hdq, dev);
++	/*
++	 * The gauge is read through UART bit-banging and one identification sometimes fails with a marginal pulse ("matched 15/16 bytes", seen on the J81
++	 * about one boot in several); a second attempt almost always succeeds (research/2026-10-10-wifi-h1b-modelA-run.md, docs/technical-debt.md entry 6).
++	 * Retry timeouts a few times with a short pause; any other error (an unknown DEVICE_TYPE, a write failure) still fails probe at once.
++	 */
++	for (attempt = 1; attempt <= HDQ_IDENTIFY_ATTEMPTS; attempt++) {
++		ret = hdq_uart_identify(hdq, dev);
++		if (ret != -ETIMEDOUT)
++			break;
++		if (attempt < HDQ_IDENTIFY_ATTEMPTS) {
++			dev_warn(dev, "HDQ identification attempt %d/%d timed out, retrying\n", attempt, HDQ_IDENTIFY_ATTEMPTS);
++			msleep(HDQ_IDENTIFY_RETRY_MS);
++		}
++	}
+ 	if (ret)
+-		return dev_err_probe(dev, ret, "HDQ device identification failed\n");
++		return dev_err_probe(dev, ret, "HDQ device identification failed after %d attempt(s)\n", min(attempt, HDQ_IDENTIFY_ATTEMPTS));
+ 
+ 	return bq27xxx_battery_setup(&hdq->di);
+ }

@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Prepare generic private Apple Wi-Fi assets on a Mac, without device access.
+
+This adapter calls the unchanged extraction library directly; the preserved
+library's original CLI depends on its complete historical package manifest.
+Radio-specific selection and boot remain a separate manual integration step.
+"""
+from pathlib import Path
+import argparse
+import hashlib
+import importlib.util
+import os
+import sys
+
+HERE = Path(__file__).resolve().parent
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--state", type=Path, required=True,
+                        help="Private owner-controlled directory outside this repository")
+    parser.add_argument("--ipsw", type=Path,
+                        help="Existing exact iPad5,3 iOS 8.1 IPSW; otherwise downloaded")
+    args = parser.parse_args()
+    if sys.platform != "darwin":
+        parser.error("This extractor uses macOS CommonCrypto and hdiutil; run it on a Mac.")
+    state = args.state.expanduser().resolve()
+    checkout = HERE.parents[1]
+    if state == checkout or state.is_relative_to(checkout):
+        parser.error("Keep private firmware state outside this source repository.")
+    source = HERE / "prepare_firmware.py"
+    data = source.read_bytes()
+    if hashlib.sha256(data).hexdigest() != "5b8cc0707cf7e73e0830ab73de8d171438d980009299ba0b90b3c959fed3736e":
+        raise SystemExit("The preserved extraction library differs from its recorded source.")
+    spec = importlib.util.spec_from_file_location("j81_private_firmware", source)
+    module = importlib.util.module_from_spec(spec)
+    exec(compile(data, str(source), "exec"), module.__dict__)
+    os.umask(0o077)
+    state = module.private_directory(state)
+    with module.state_lock(state):
+        module.check_native_crypto()
+        result = module.prepare_assets(state, args.ipsw)
+    print("Generic firmware assets prepared privately:", result)
+    print("No board selector was guessed. No iPad was contacted or booted.")
+
+
+if __name__ == "__main__":
+    main()

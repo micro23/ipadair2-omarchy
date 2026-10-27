@@ -1,0 +1,83 @@
+--- a/drivers/pci/controller/pcie-apple-t7000.c	2026-10-05 12:41:18
++++ b/drivers/pci/controller/pcie-apple-t7000.c	2026-10-05 12:41:18
+@@ -39,12 +39,14 @@
+  */
+ 
+ #include <linux/bitops.h>
++#include <linux/build_bug.h>
+ #include <linux/delay.h>
+ #include <linux/err.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/i2c.h>
+ #include <linux/io.h>
+ #include <linux/jiffies.h>
++#include <linux/log2.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/of_address.h>
+@@ -143,18 +145,43 @@
+ #define T7000_PCIE_PORT_TAIL_C		0x114
+ 
+ /*
+- * MSI-controller registers, written by Apple's
+- * FUN_ffffff8002befa14(port) callback (decompiled 2026-09-25): +0x124
+- * encodes the vector count, +0x128 receives
+- * `msi-vector-base | (msi-vector-base << 16)`. J81's ADT properties are
+- * 8 vectors / base 8, giving Apple's exact values below -- see
+- * research/t7000-pcie-stage5-handoff.md's "Callback decompilation
+- * result" section.
++ * Per-port MSI controller registers, written by Apple's FUN_ffffff8002befa14(port)
++ * callback (decompiled 2026-09-25). Apple encodes the port's vector count in MSICFG as
++ * `EN | log2(count) << 4` (0/1/2/4/8/16/32 vectors -> 0x00/0x01/0x11/0x21/0x31/0x41/0x51)
++ * and writes `base | base << 16` to MSIBASE. These are the same registers and encodings as
++ * the in-tree Apple M1 driver's PORT_MSICFG/PORT_MSIBASE. They are programmed here; no MSI
++ * domain exists yet. The doorbell address register (+0x168 on M1) is never written by Apple
++ * on this hardware and is not written here.
+  */
+-#define T7000_PCIE_MSI_VECTOR_COUNT	0x124
+-#define T7000_PCIE_MSI_VECTOR_BASE	0x128
++#define T7000_PCIE_PORT_MSICFG			0x124
++#define T7000_PCIE_PORT_MSICFG_EN		BIT(0)
++#define T7000_PCIE_PORT_MSICFG_L2NUM_SHIFT	4
++#define T7000_PCIE_PORT_MSIBASE			0x128
++#define T7000_PCIE_PORT_MSIBASE_1_SHIFT		16
+ 
+ /*
++ * J81 port 1's slice of the controller's 32 MSI vectors (ADT `msi-vector-base` = 8 and
++ * `#msi-vectors` = 8). Vectors are numbered globally, so port 1 owns slots 8..15; a future MSI
++ * domain must allocate only from this window and use the same two constants.
++ */
++#define T7000_PCIE_MSI_PORT_BASE		8
++#define T7000_PCIE_MSI_PORT_COUNT		8
++
++#define T7000_PCIE_PORT_MSICFG_VALUE \
++	(T7000_PCIE_PORT_MSICFG_EN | \
++	 (ilog2(T7000_PCIE_MSI_PORT_COUNT) << T7000_PCIE_PORT_MSICFG_L2NUM_SHIFT))
++#define T7000_PCIE_PORT_MSIBASE_VALUE \
++	(T7000_PCIE_MSI_PORT_BASE | \
++	 (T7000_PCIE_MSI_PORT_BASE << T7000_PCIE_PORT_MSIBASE_1_SHIFT))
++
++static_assert(T7000_PCIE_MSI_PORT_COUNT && !(T7000_PCIE_MSI_PORT_COUNT & (T7000_PCIE_MSI_PORT_COUNT - 1)));
++static_assert(T7000_PCIE_MSI_PORT_BASE % T7000_PCIE_MSI_PORT_COUNT == 0);
++static_assert(T7000_PCIE_MSI_PORT_BASE + T7000_PCIE_MSI_PORT_COUNT <= 32);
++/* The values Apple's callback produces for 8 vectors at base 8 (hardware-proven since 0045). */
++static_assert(T7000_PCIE_PORT_MSICFG_VALUE == 0x00000031);
++static_assert(T7000_PCIE_PORT_MSIBASE_VALUE == 0x00080008);
++
++/*
+  * J81's `maximum-link-speed = 1` ADT property, applied by Apple's
+  * FUN_ffffff8002bef7c8(): a standard PCIe capability read-modify-write on the root port
+  * itself, not a controller-specific register (research/t7000-pcie-stage5-handoff.md).
+@@ -617,8 +644,10 @@
+ 	t7000_pcie_write32(dev, ctrl, "port-tail", T7000_PCIE_PORT_TAIL_C, 0x00000000);
+ 	t7000_pcie_write32(dev, ctrl, "port-tail", T7000_PCIE_PORT_TAIL_B, 0xff70afff);
+ 	t7000_pcie_write32(dev, ctrl, "port-tail", T7000_PCIE_PORT_TAIL_A, 0x008f5000);
+-	t7000_pcie_write32(dev, ctrl, "msi", T7000_PCIE_MSI_VECTOR_COUNT, 0x00000031);
+-	t7000_pcie_write32(dev, ctrl, "msi", T7000_PCIE_MSI_VECTOR_BASE, 0x00080008);
++	t7000_pcie_write32(dev, ctrl, "msi", T7000_PCIE_PORT_MSICFG,
++			   T7000_PCIE_PORT_MSICFG_VALUE);
++	t7000_pcie_write32(dev, ctrl, "msi", T7000_PCIE_PORT_MSIBASE,
++			   T7000_PCIE_PORT_MSIBASE_VALUE);
+ 
+ 	t7000_pcie_deassert_perst(dev, bridge);
+ 

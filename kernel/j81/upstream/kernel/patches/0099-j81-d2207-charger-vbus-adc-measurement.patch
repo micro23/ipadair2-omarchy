@@ -1,0 +1,160 @@
+diff --git a/drivers/power/supply/j81_d2207_charger.c b/drivers/power/supply/j81_d2207_charger.c
+--- a/drivers/power/supply/j81_d2207_charger.c
++++ b/drivers/power/supply/j81_d2207_charger.c
+@@ -16,7 +16,12 @@
+  * console tool provides is deliberately userspace policy, not
+  * duplicated here.
+  */
++#include <linux/bits.h>
++#include <linux/delay.h>
+ #include <linux/device.h>
++#include <linux/jiffies.h>
++#include <linux/math64.h>
++#include <linux/mutex.h>
+ #include <linux/kernel.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
+@@ -28,9 +33,92 @@
+ /* Matches the get_property decode: valid non-saturated codes are 0..0xfd. */
+ #define J81_D2207_INPUT_CURRENT_MIN_UA		75000
+ #define J81_D2207_INPUT_CURRENT_MAX_UA		3262000
++/*
++ * VBUS measurement through the D2207 ADC (research/2026-10-11-d2207-vbus-adc.md): channel 9 is VBUS current, channel 19 VBUS voltage. A conversion starts by writing
++ * the channel and bit 7 to 0x0500; completion is PMU vector 89 = event register 0x005b bit 1 (mask 0x007b bit 1, active low); the result is two bytes at 0x0502.
++ */
++#define J81_D2207_ADC_CTRL		0x0500
++#define J81_D2207_ADC_CTRL2		0x0501
++#define J81_D2207_ADC_RESULT		0x0502
++#define J81_D2207_EVENT_ADC		0x005b
++#define J81_D2207_MASK_ADC		0x007b
++#define J81_D2207_ADC_EVENT		BIT(1)
++#define J81_D2207_ADC_START		BIT(7)
++#define J81_D2207_ADC_KEEP		BIT(6)		/* carried over from the cached control baseline, meaning not named */
++#define J81_D2207_ADC_VBUS_CURRENT	9
++#define J81_D2207_ADC_VBUS_VOLTAGE	19
++#define J81_D2207_ADC_TIMEOUT_MS	1000
++
+ struct j81_d2207_charger {
+ 	struct regmap *regmap;
++	struct mutex adc_lock;		/* one whole conversion at a time; regmap only locks single transfers */
+ };
++
++/*
++ * One bounded ADC conversion of @channel; returns the 12-bit raw sample in @raw.
++ *
++ * Temporary J81 implementation: the generic Apple PMIC parent has no D2207 interrupt controller, so completion is polled in the event register. Reading 0x005b
++ * acknowledges every pending event bit in that byte (Apple's own read-to-clear); that is only safe while nothing else in Linux consumes D2207 events. The control
++ * registers are saved and restored exactly, on success and on every error path.
++ */
++static int j81_d2207_adc_read(struct j81_d2207_charger *charger, unsigned int channel, unsigned int *raw)
++{
++	unsigned int ctrl = 0, ctrl2 = 0, mask = 0, ev = 0, now;
++	u8 res[2];
++	unsigned long deadline;
++	int ret, ret2;
++
++	mutex_lock(&charger->adc_lock);
++	ret = regmap_read(charger->regmap, J81_D2207_ADC_CTRL, &ctrl);
++	if (!ret)
++		ret = regmap_read(charger->regmap, J81_D2207_ADC_CTRL2, &ctrl2);
++	if (!ret)
++		ret = regmap_read(charger->regmap, J81_D2207_MASK_ADC, &mask);
++	if (ret)
++		goto unlock;		/* nothing has been changed yet */
++
++	/* Discard a stale completion, then unmask the event as Apple's enableVector() does. */
++	ret = regmap_read(charger->regmap, J81_D2207_EVENT_ADC, &ev);
++	if (!ret && (mask & J81_D2207_ADC_EVENT))
++		ret = regmap_write(charger->regmap, J81_D2207_MASK_ADC, mask & ~J81_D2207_ADC_EVENT);
++	if (!ret)
++		ret = regmap_write(charger->regmap, J81_D2207_ADC_CTRL,
++				   (ctrl & J81_D2207_ADC_KEEP) | channel | J81_D2207_ADC_START);
++	if (!ret) {
++		deadline = jiffies + msecs_to_jiffies(J81_D2207_ADC_TIMEOUT_MS);
++		for (;;) {
++			ret = regmap_read(charger->regmap, J81_D2207_EVENT_ADC, &ev);
++			if (ret || (ev & J81_D2207_ADC_EVENT))
++				break;
++			if (time_after(jiffies, deadline)) {
++				ret = -ETIMEDOUT;
++				break;
++			}
++			usleep_range(1000, 2000);
++		}
++	}
++	if (!ret)
++		ret = regmap_bulk_read(charger->regmap, J81_D2207_ADC_RESULT, res, sizeof(res));
++	if (!ret) {
++		/* Bits 7:4 of the first byte are state, not sample; exact J81 rejects channel 9 when its bit 7 is set. */
++		if (channel == J81_D2207_ADC_VBUS_CURRENT && (res[0] & BIT(7)))
++			ret = -EIO;
++		else
++			*raw = (res[1] << 4) | (res[0] & 0x0f);
++	}
++
++	/* Cleanup runs after any failure past the first write: restore the saved bytes. 0x0501 is not modified by these channels, so only repair it if it differs. */
++	ret2 = regmap_write(charger->regmap, J81_D2207_ADC_CTRL, ctrl);
++	if (!ret2 && !regmap_read(charger->regmap, J81_D2207_ADC_CTRL2, &now) && now != ctrl2)
++		ret2 = regmap_write(charger->regmap, J81_D2207_ADC_CTRL2, ctrl2);
++	if (!ret2 && (mask & J81_D2207_ADC_EVENT))
++		ret2 = regmap_write(charger->regmap, J81_D2207_MASK_ADC, mask);
++	if (!ret)
++		ret = ret2;
++unlock:
++	mutex_unlock(&charger->adc_lock);
++	return ret;
++}
+ /* Apple encodes 75..3262 mA as floor((8*mA - 600) / 100). */
+ static int j81_d2207_input_current_ma(unsigned int code)
+ {
+@@ -51,7 +139,23 @@
+ static enum power_supply_property j81_d2207_properties[] = {
+ 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+ 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX,
++	POWER_SUPPLY_PROP_CURRENT_NOW,		/* measured VBUS current: one ADC conversion per read (also per read of the uevent file) */
++	POWER_SUPPLY_PROP_VOLTAGE_NOW,		/* measured VBUS voltage */
+ };
++
++/*
++ * Apple's conversions return 16.16 fixed-point volts and amps (research/2026-10-12-d2207-vbus-scale.md): voltage = raw * 88 / 65536 V, current = floor(raw * 52800 / 1000) /
++ * 65536 A. In micro units that is x 1e6 / 65536 = x 15625 / 1024. The 12-bit full scales come out as 5.50 V and 3.30 A.
++ */
++static u32 j81_d2207_vbus_uv(unsigned int raw)
++{
++	return div_u64((u64)raw * 88 * 15625, 1024);
++}
++
++static u32 j81_d2207_vbus_ua(unsigned int raw)
++{
++	return div_u64((u64)(raw * 52800 / 1000) * 15625, 1024);
++}
+ static int j81_d2207_get_property(struct power_supply *psy,
+ 					 enum power_supply_property property,
+ 					 union power_supply_propval *val)
+@@ -74,6 +178,18 @@
+ 		/* 0x3c is 3000 mA and 0x3f is the 3150 mA hardware ceiling. */
+ 		val->intval = (code & 0x3f) * 50000;
+ 		return 0;
++	case POWER_SUPPLY_PROP_CURRENT_NOW:
++		ret = j81_d2207_adc_read(charger, J81_D2207_ADC_VBUS_CURRENT, &code);
++		if (ret)
++			return ret;
++		val->intval = j81_d2207_vbus_ua(code);
++		return 0;
++	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
++		ret = j81_d2207_adc_read(charger, J81_D2207_ADC_VBUS_VOLTAGE, &code);
++		if (ret)
++			return ret;
++		val->intval = j81_d2207_vbus_uv(code);
++		return 0;
+ 	default:
+ 		return -EINVAL;
+ 	}
+@@ -119,6 +235,7 @@
+ 	if (!charger->regmap)
+ 		return dev_err_probe(&pdev->dev, -ENODEV,
+ 				     "parent PMIC regmap unavailable\n");
++	mutex_init(&charger->adc_lock);
+ 	config.drv_data = charger;
+ 	return PTR_ERR_OR_ZERO(devm_power_supply_register(&pdev->dev,
+ 							 &j81_d2207_desc, &config));

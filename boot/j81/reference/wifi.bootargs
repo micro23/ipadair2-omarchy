@@ -1,0 +1,1 @@
+chosen.bootargs=console=tty0 loglevel=7 rdinit=/init PMOS_NO_OUTPUT_REDIRECT pd_ignore_unused clk_ignore_unused pcie_aspm=off pcie_apple_t7000.device_wake=1 fbcon=font:TER16x32

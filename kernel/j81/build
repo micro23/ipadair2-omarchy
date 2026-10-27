@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Run the preserved J81 kernel producer in an explicit external work tree."""
+from pathlib import Path
+import argparse
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
+
+HERE = Path(__file__).resolve().parent
+
+
+def digest(path):
+    value = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            value.update(block)
+    return value.hexdigest()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("profile", choices=("radio-id", "wifi", "all"))
+    parser.add_argument("--linux-archive", type=Path, required=True)
+    parser.add_argument("--toolchain", type=Path, required=True,
+                        help="Unpacked Linux x86_64 AArch64 toolchain root; see README.md")
+    parser.add_argument("--output", type=Path, required=True,
+                        help="New or empty work directory outside this checkout")
+    parser.add_argument("--jobs", type=int, default=6, choices=range(1, 7))
+    parser.add_argument("--check-inputs", action="store_true",
+                        help="Check source inputs and compiler presence without compiling or writing")
+    args = parser.parse_args()
+    archive = args.linux_archive.resolve(strict=True)
+    toolchain = args.toolchain.resolve(strict=True)
+    output = args.output.resolve()
+    checkout = HERE.parents[1]
+    if output == checkout or output.is_relative_to(checkout):
+        parser.error("Choose an output directory outside the source checkout.")
+    if output.exists() and (not output.is_dir() or any(output.iterdir())):
+        parser.error("The output directory must be new or empty.")
+    if digest(archive) != "5eca8c1a096009ef867451d08433735ff29548220adb880f85b9840de65bf15f":
+        parser.error("The Linux archive differs from the pinned source.")
+    if digest(HERE / "configs/baseline.config") != "a5cbcb0d3fe655888106672e6fe03477b63d51bd36bbcfc4f5145627d906b208":
+        parser.error("The baseline configuration differs from the pinned input.")
+    for name in ("aarch64-linux-gnu-gcc", "aarch64-linux-gnu-ld", "bison", "m4", "dtc", "fdtget"):
+        if not (toolchain / "usr/bin" / name).is_file():
+            parser.error("Missing toolchain program: " + name)
+    for profile in (["radio-id", "wifi"] if args.profile == "all" else [args.profile]):
+        reference = json.loads((HERE / "reference" / (profile + "-source-prepared.json")).read_text())
+        for record in reference["patches"]:
+            if digest(HERE / "upstream/kernel/patches" / record["name"]) != record["sha256"]:
+                parser.error("Pinned patch changed: " + record["name"])
+    if args.check_inputs:
+        print("Pinned Linux archive, baseline, patch inputs and toolchain paths verified. No build ran.")
+        return
+    output.mkdir(parents=True, exist_ok=True)
+    for name in ("build_kernels.py", "verify_built.py"):
+        shutil.copy2(HERE / "reference" / name, output / name)
+    subprocess.run([
+        sys.executable, "-B", str(output / "build_kernels.py"), args.profile,
+        "--archive", str(archive), "--base-config", str(HERE / "configs/baseline.config"),
+        "--project", str(HERE / "upstream"), "--toolchain", str(toolchain),
+        "--jobs", str(args.jobs),
+    ], check=True)
+    for profile in (["radio-id", "wifi"] if args.profile == "all" else [args.profile]):
+        subprocess.run([
+            sys.executable, "-B", str(output / "verify_built.py"), profile,
+            "--project", str(HERE / "upstream"),
+        ], check=True)
+
+
+if __name__ == "__main__":
+    main()

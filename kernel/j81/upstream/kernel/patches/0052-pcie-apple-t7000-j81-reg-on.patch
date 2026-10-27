@@ -1,0 +1,196 @@
+diff --git a/drivers/pci/controller/pcie-apple-t7000.c b/drivers/pci/controller/pcie-apple-t7000.c
+--- a/drivers/pci/controller/pcie-apple-t7000.c
++++ b/drivers/pci/controller/pcie-apple-t7000.c
+@@ -1,5 +1,10 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /*
++ * J81 Wi-Fi REG_ON: assert the BCM4350's `function-reg_on` (D2207 PMU
++ * GPIO 3, register 0x0403) before PCIe setup, then wait 100 ms. This
++ * follows the hardware-proven order from Apple's board configuration.
++ * See t7000_pcie_assert_j81_wifi_reg_on().
++ *
+  * Apple T7000-family PCIe -- enable-sequence + generic-enumeration +
+  * PERST + controller-tuning/DBI-override RMW + enableGated()'s full
+  * recovered tail + bounded link-up poll + recovered maximum-link-speed
+@@ -73,12 +78,15 @@
+ #include <linux/delay.h>
+ #include <linux/err.h>
+ #include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
+ #include <linux/io.h>
+ #include <linux/jiffies.h>
+ #include <linux/module.h>
++#include <linux/of.h>
+ #include <linux/of_address.h>
+ #include <linux/pci-ecam.h>
+ #include <linux/platform_device.h>
++#include <linux/regmap.h>
+ 
+ #include "pci-host-common.h"
+ 
+@@ -640,7 +648,86 @@ static const struct pci_ecam_ops apple_t7000_pcie_ecam_ops = {
+ 		.write		= pci_generic_config_write,
+ 	},
+ };
++
++/*
++ * J81's BCM4350 `function-reg_on` is D2207 PMU GPIO 3 (ADT OIPG pin 3).
++ * Apple's _index2GPIOAddress maps GPIO indices 0..16 to 0x0400 | index,
++ * hence GPIO3 is configuration register 0x0403. The phandle is mandatory
++ * only for boards that opt in to this J81-specific sequence; it prevents a
++ * generic T7000 PCIe instance from selecting an arbitrary compatible PMIC.
++ *
++ * Apple programs "level high, polarity set" as (old & 0x1d) | 0x02. The
++ * observed reset value is 0x09 and the resulting asserted value is 0x0b.
++ * Rejecting nonzero upper bits retains the proven test-stage guard. A
++ * declared resource must be available and verify on readback: starting PCIe
++ * with an unverified Wi-Fi power state is not useful. No other PMU register,
++ * including the separate Bluetooth GPIO2 register, is referenced here.
++ *
++ * REG_ON deliberately remains asserted after a later PCIe-probe failure and
++ * across driver unbind. BCM4350 is non-removable, the D2207 resets this
++ * configuration on the next full reboot, and no hardware evidence says that
++ * deasserting it after a partial host-controller sequence is safe.
++ */
++#define T7000_PCIE_J81_REG_ON_PMIC	"apple,reg-on-pmic"
++#define T7000_PCIE_J81_REG_ON_CONFIG	0x0403
++#define T7000_PCIE_J81_REG_ON_DELAY_MS	100
+ 
++static int t7000_pcie_assert_j81_wifi_reg_on(struct device *dev)
++{
++	struct device_node *np;
++	struct i2c_client *client;
++	struct regmap *map;
++	unsigned int old, value, readback;
++	int ret;
++
++	if (!of_property_present(dev->of_node, T7000_PCIE_J81_REG_ON_PMIC))
++		return 0;
++
++	np = of_parse_phandle(dev->of_node, T7000_PCIE_J81_REG_ON_PMIC, 0);
++	if (!np)
++		return -EINVAL;
++
++	client = of_find_i2c_device_by_node(np);
++	of_node_put(np);
++	if (!client)
++		return -EPROBE_DEFER;
++
++	map = dev_get_regmap(&client->dev, NULL);
++	if (!map) {
++		ret = -EPROBE_DEFER;
++		goto out_put_client;
++	}
++
++	ret = regmap_read(map, T7000_PCIE_J81_REG_ON_CONFIG, &old);
++	if (ret)
++		goto out_put_client;
++
++	if (old & 0xe0) {
++		ret = -EINVAL;
++		goto out_put_client;
++	}
++
++	value = (old & 0x1d) | 0x02;
++	ret = regmap_write(map, T7000_PCIE_J81_REG_ON_CONFIG, value);
++	if (ret)
++		goto out_put_client;
++
++	ret = regmap_read(map, T7000_PCIE_J81_REG_ON_CONFIG, &readback);
++	if (ret)
++		goto out_put_client;
++	if (readback != value) {
++		ret = -EIO;
++		goto out_put_client;
++	}
++
++	dev_info(dev, "J81 Wi-Fi REG_ON: 0x%04x 0x%02x -> 0x%02x\n",
++		 T7000_PCIE_J81_REG_ON_CONFIG, old, readback);
++	msleep(T7000_PCIE_J81_REG_ON_DELAY_MS);
++out_put_client:
++	put_device(&client->dev);
++	return ret;
++}
++
+ static int apple_t7000_pcie_probe(struct platform_device *pdev)
+ {
+ 	struct pci_host_bridge *bridge;
+@@ -648,6 +735,11 @@ static int apple_t7000_pcie_probe(struct platform_device *pdev)
+ 
+ 	dev_info(&pdev->dev, "t7000-pcie tuning-baseline-test: probe entry\n");
+ 
++	ret = t7000_pcie_assert_j81_wifi_reg_on(&pdev->dev);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret,
++				     "failed to assert declared J81 Wi-Fi REG_ON\n");
++
+ 	bridge = devm_pci_alloc_host_bridge(&pdev->dev, 0);
+ 	if (!bridge)
+ 		return -ENOMEM;
+@@ -676,5 +768,5 @@ static struct platform_driver apple_t7000_pcie_driver = {
+ };
+ module_platform_driver(apple_t7000_pcie_driver);
+ 
+-MODULE_DESCRIPTION("Apple T7000 PCIe port-1 full recovered enableGated() sequence plus recovered maximum-link-speed capability RMW (Stage 5F)");
++MODULE_DESCRIPTION("Apple T7000 PCIe plus board-declared J81 BCM4350 REG_ON");
+ MODULE_LICENSE("GPL");
+diff --git a/arch/arm64/boot/dts/apple/t7001-air2.dtsi b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -146,7 +146,7 @@
+ &i2c0 {
+ 	status = "okay";
+ 
+-	pmic@3c {
++	d2207: pmic@3c {
+ 		compatible = "apple,arabela-pmic", "apple,i2c-pmic";
+ 		reg = <0x3c>;
+ 		#address-cells = <1>;
+@@ -184,3 +184,11 @@
+ 		};
+ 	};
+ };
++
++&pcie {
++	/*
++	 * BCM4350 Wi-Fi REG_ON is D2207 GPIO3. Bluetooth uses a distinct PMU
++	 * GPIO and is intentionally not described by this Wi-Fi-only resource.
++	 */
++	apple,reg-on-pmic = <&d2207>;
++};
+diff --git a/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml b/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
+new file mode 100644
+--- /dev/null
++++ b/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
+@@ -0,0 +1,30 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/pci/apple,t7000-pcie.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Apple T7000 PCIe host controller
++
++description: |
++  The T7000 PCIe host controller used by the iPad Air 2. This out-of-tree
++  binding documents the board-local BCM4350 Wi-Fi power prerequisite.
++
++properties:
++  compatible:
++    const: apple,t7000-pcie
++
++  apple,reg-on-pmic:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description: |
++      D2207 PMIC supplying BCM4350 Wi-Fi REG_ON on J81. The driver sets and
++      verifies only GPIO3 (configuration register 0x0403), then waits 100 ms
++      before PCIe setup. It does not describe or control Bluetooth.
++
++additionalProperties: true
++
++examples:
++  - |
++    pcie@610000000 {
++      compatible = "apple,t7000-pcie";
++      apple,reg-on-pmic = <&d2207>;
++    };

@@ -1,0 +1,148 @@
+diff --git a/arch/arm64/boot/dts/apple/t7001.dtsi b/arch/arm64/boot/dts/apple/t7001.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001.dtsi
+@@ -438,6 +438,11 @@
+ 				device_type = "pci";
+ 				reg = <0x0 0x0 0x0 0x0 0x0>;
+ 				reset-gpios = <&pinctrl 179 GPIO_ACTIVE_LOW>;
++				/*
++				 * ADT pci-bridge1 function-device_wake (OIPG pin 0xa5, flags 0x101). Only driven
++				 * when the test boot argument pcie_apple_t7000.device_wake=1 is given.
++				 */
++				device-wake-gpios = <&pinctrl 165 GPIO_ACTIVE_HIGH>;
+ 			};
+ 		};
+ 
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -799,6 +799,45 @@
+ }
+ 
+ 
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++/*
++ * Test only (patch 0067): how the host answers the firmware's deep-sleep request.
++ * 0 = stock (mailbox word plus the config-space SBMBX write), 1 = no acknowledgement (log only),
++ * 2 = Apple's way: mailbox word plus an MMIO write of 1 to H2D mailbox 1 (core +0x144).
++ */
++static int h1b_ds_ack_mode;
++module_param_named(h1b_ds_ack, h1b_ds_ack_mode, int, 0444);
++MODULE_PARM_DESC(h1b_ds_ack, "J81 test: 0 stock deep-sleep ACK, 1 none, 2 ACK via MMIO H2D mailbox 1");
++
++static void h1b_send_ds_ack(struct brcmf_pciedev_info *devinfo)
++{
++	struct device *dev = &devinfo->pdev->dev;
++	u32 addr = devinfo->shared.htod_mb_data_addr;
++
++	switch (h1b_ds_ack_mode) {
++	case 1:
++		dev_info(dev, "t7000-h1b: deep sleep request NOT acknowledged (h1b_ds_ack=1)\n");
++		return;
++	case 2:
++		if (brcmf_pcie_read_tcm32(devinfo, addr)) {
++			dev_info(dev, "t7000-h1b: host mailbox word still pending, ACK skipped (h1b_ds_ack=2)\n");
++			return;
++		}
++		brcmf_pcie_write_tcm32(devinfo, addr, BRCMF_H2D_HOST_DS_ACK);
++		brcmf_pcie_write_reg32(devinfo, devinfo->reginfo->h2d_mailbox_1, 1);
++		dev_info(dev, "t7000-h1b: deep sleep ACK sent by MMIO H2D mailbox 1 (h1b_ds_ack=2)\n");
++		return;
++	default:
++		brcmf_pcie_send_mb_data(devinfo, BRCMF_H2D_HOST_DS_ACK);
++	}
++}
++#else
++static inline void h1b_send_ds_ack(struct brcmf_pciedev_info *devinfo)
++{
++	brcmf_pcie_send_mb_data(devinfo, BRCMF_H2D_HOST_DS_ACK);
++}
++#endif
++
+ static void brcmf_pcie_handle_mb_data(struct brcmf_pciedev_info *devinfo)
+ {
+ 	struct brcmf_pcie_shared_info *shared;
+@@ -817,7 +856,7 @@
+ 	brcmf_dbg(PCIE, "D2H_MB_DATA: 0x%04x\n", dtoh_mb_data);
+ 	if (dtoh_mb_data & BRCMF_D2H_DEV_DS_ENTER_REQ)  {
+ 		brcmf_dbg(PCIE, "D2H_MB_DATA: DEEP SLEEP REQ\n");
+-		brcmf_pcie_send_mb_data(devinfo, BRCMF_H2D_HOST_DS_ACK);
++		h1b_send_ds_ack(devinfo);
+ 		brcmf_dbg(PCIE, "D2H_MB_DATA: sent DEEP SLEEP ACK\n");
+ 	}
+ 	if (dtoh_mb_data & BRCMF_D2H_DEV_DS_EXIT_NOTE)
+diff --git a/drivers/pci/controller/Kconfig b/drivers/pci/controller/Kconfig
+--- a/drivers/pci/controller/Kconfig
++++ b/drivers/pci/controller/Kconfig
+@@ -82,6 +82,16 @@
+ 
+ 	  If unsure, say N.
+ 
++config PCIE_APPLE_T7000_DEVICE_WAKE_TEST
++	bool "Optionally drive the J81 Wi-Fi DEVICE_WAKE GPIO (test kernels only)"
++	depends on PCIE_APPLE_T7000
++	help
++	  Adds the boot argument pcie_apple_t7000.device_wake=1, which drives
++	  the root-port node's device-wake GPIO high after link-up. Does nothing
++	  unless the argument is given. Not for production kernels.
++
++	  If unsure, say N.
++
+ config PCI_VERSATILE
+ 	bool "ARM Versatile PB PCI controller"
+ 	depends on ARCH_VERSATILE || COMPILE_TEST
+diff --git a/drivers/pci/controller/pcie-apple-t7000.c b/drivers/pci/controller/pcie-apple-t7000.c
+--- a/drivers/pci/controller/pcie-apple-t7000.c
++++ b/drivers/pci/controller/pcie-apple-t7000.c
+@@ -647,6 +647,42 @@
+ static inline void t7000_pcie_debugfs(struct device *dev, void __iomem *ctrl) { }
+ #endif
+ 
++#ifdef CONFIG_PCIE_APPLE_T7000_DEVICE_WAKE_TEST
++/*
++ * Test only (patch 0067): drive the endpoint's DEVICE_WAKE input high. iOS drives it through
++ * AppleEmbeddedPCIEPort::setDeviceWake() while the Wi-Fi device is active, and the proven NVRAM
++ * (device_wake_opt=1) makes the firmware depend on it to leave deep sleep. Off unless the boot
++ * argument pcie_apple_t7000.device_wake=1 is given; the descriptor is held for the device's life.
++ */
++static bool t7000_device_wake;
++module_param_named(device_wake, t7000_device_wake, bool, 0444);
++MODULE_PARM_DESC(device_wake, "J81 test: assert the Wi-Fi DEVICE_WAKE GPIO (165) after link-up");
++
++static void t7000_pcie_device_wake(struct device *dev)
++{
++	struct device_node *child;
++	struct gpio_desc *desc;
++
++	if (!t7000_device_wake)
++		return;
++	for_each_child_of_node(dev->of_node, child) {
++		if (!of_node_is_type(child, "pci"))
++			continue;
++		desc = devm_fwnode_gpiod_get_index(dev, of_fwnode_handle(child), "device-wake", 0,
++						   GPIOD_OUT_HIGH, "t7000-device-wake");
++		if (IS_ERR(desc))
++			dev_err(dev, "t7000-pcie: DEVICE_WAKE GPIO unavailable: %ld\n", PTR_ERR(desc));
++		else
++			dev_info(dev, "t7000-pcie: DEVICE_WAKE asserted, GPIO reads %d\n", gpiod_get_value(desc));
++		of_node_put(child);
++		return;
++	}
++	dev_warn(dev, "t7000-pcie: no root-port node for DEVICE_WAKE\n");
++}
++#else
++static inline void t7000_pcie_device_wake(struct device *dev) { }
++#endif
++
+ static int apple_t7000_pcie_init(struct pci_config_window *cfg)
+ {
+ 	struct device *dev = cfg->parent;
+@@ -704,6 +740,8 @@
+ 	t7000_pcie_wait_link_active(dev, cfg, ctrl);
+ 
+ 	t7000_pcie_debugfs(dev, ctrl);
++
++	t7000_pcie_device_wake(dev);
+ 
+ 	dev_dbg(dev, "t7000-pcie: init complete, handing back to the generic ECAM core\n");
+ 

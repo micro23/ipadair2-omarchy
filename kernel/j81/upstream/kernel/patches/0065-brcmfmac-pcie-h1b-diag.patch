@@ -1,0 +1,196 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/Kconfig b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/Kconfig
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/Kconfig
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/Kconfig
+@@ -48,3 +48,12 @@
+ 	  IEEE802.11ac embedded FullMAC WLAN driver. Say Y if you want to
+ 	  use the driver for an PCIE wireless card.
+ 
++config BRCMFMAC_PCIE_H1B_DIAG
++	bool "Read-only DMA/MSI diagnostics for the J81 Wi-Fi bring-up (test kernels only)"
++	depends on BRCMFMAC_PCIE
++	help
++	  Logs ring and scratch buffer IOVAs with their IOMMU translation, the
++	  endpoint MSI capability and interrupt chain, every interrupt as it is
++	  taken, and a ring-state snapshot when the firmware is declared dead.
++	  Writes nothing. Not for production kernels.
++
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -17,6 +17,8 @@
+ #include <linux/io.h>
+ #include <linux/random.h>
+ #include <linux/unaligned.h>
++#include <linux/iommu.h>
++#include <linux/irq.h>
+ 
+ #include <soc.h>
+ #include <chipcommon.h>
+@@ -938,6 +940,110 @@
+ }
+ 
+ 
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++/*
++ * Test-only Wi-Fi H1B diagnostics (patch 0065). Read-only: it logs what the host gave the firmware
++ * (ring/scratch IOVAs and their IOMMU translation), the endpoint MSI capability and interrupt chain
++ * while bound, every interrupt as it is taken, and the ring state when the firmware is declared dead.
++ * It writes no register, TCM word or memory, and dumps only protocol headers, never firmware RAM.
++ */
++#define H1B_PREFIX "t7000-h1b: "
++static atomic_t h1b_isr_count = ATOMIC_INIT(0);
++
++static void h1b_log_domain(struct brcmf_pciedev_info *devinfo)
++{
++	struct iommu_domain *dom = iommu_get_domain_for_dev(&devinfo->pdev->dev);
++	u16 cmd = 0;
++
++	pci_read_config_word(devinfo->pdev, PCI_COMMAND, &cmd);
++	if (!dom) {
++		dev_info(&devinfo->pdev->dev, H1B_PREFIX "no IOMMU domain; pci command 0x%04x\n", cmd);
++		return;
++	}
++	dev_info(&devinfo->pdev->dev, H1B_PREFIX "iommu domain type 0x%x aperture %pad..%pad force %d; pci command 0x%04x\n",
++		 dom->type, &dom->geometry.aperture_start, &dom->geometry.aperture_end,
++		 dom->geometry.force_aperture, cmd);
++}
++
++static void h1b_log_dma(struct brcmf_pciedev_info *devinfo, const char *what, dma_addr_t iova, u32 size)
++{
++	struct iommu_domain *dom = iommu_get_domain_for_dev(&devinfo->pdev->dev);
++	phys_addr_t phys = dom ? iommu_iova_to_phys(dom, iova) : 0;
++
++	dev_info(&devinfo->pdev->dev, H1B_PREFIX "dma %s: size %u iova %pad -> phys %pa\n", what, size, &iova, &phys);
++}
++
++static void h1b_log_msi(struct brcmf_pciedev_info *devinfo, const char *when)
++{
++	struct pci_dev *pdev = devinfo->pdev;
++	struct irq_data *d;
++	u16 ctl = 0, data = 0;
++	u32 lo = 0, hi = 0;
++	int pos = pdev->msi_cap;
++
++	if (pos) {
++		pci_read_config_word(pdev, pos + PCI_MSI_FLAGS, &ctl);
++		pci_read_config_dword(pdev, pos + PCI_MSI_ADDRESS_LO, &lo);
++		if (ctl & PCI_MSI_FLAGS_64BIT) {
++			pci_read_config_dword(pdev, pos + PCI_MSI_ADDRESS_HI, &hi);
++			pci_read_config_word(pdev, pos + PCI_MSI_DATA_64, &data);
++		} else {
++			pci_read_config_word(pdev, pos + PCI_MSI_DATA_32, &data);
++		}
++	}
++	dev_info(&pdev->dev, H1B_PREFIX "msi %s: irq %d msi_enabled %d ctl 0x%04x addr 0x%08x_%08x data %u\n",
++		 when, pdev->irq, pdev->msi_enabled, ctl, hi, lo, data);
++	for (d = irq_get_irq_data(pdev->irq); d; d = d->parent_data)
++		dev_info(&pdev->dev, H1B_PREFIX "  irq chain: domain %s hwirq %lu\n",
++			 d->domain && d->domain->name ? d->domain->name : "?", d->hwirq);
++}
++
++static void h1b_isr_note(struct brcmf_pciedev_info *devinfo, int irq, u32 status)
++{
++	u32 n = atomic_inc_return(&h1b_isr_count);
++
++	if (n <= 32)
++		dev_info(&devinfo->pdev->dev, H1B_PREFIX "isr #%u irq %d mailbox status 0x%x\n", n, irq, status);
++}
++
++/* Ring state as host and device see it, plus the control rings' first items (protocol headers). */
++static void h1b_dump_rings(struct brcmf_pciedev_info *devinfo, const char *why)
++{
++	struct device *dev = &devinfo->pdev->dev;
++	int i;
++
++	dev_info(dev, H1B_PREFIX "ring snapshot (%s): isr count %d, mailbox int 0x%x\n", why,
++		 atomic_read(&h1b_isr_count), brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->mailboxint));
++	h1b_log_domain(devinfo);
++	h1b_log_msi(devinfo, "at snapshot");
++	for (i = 0; i < BRCMF_NROF_COMMON_MSGRINGS; i++) {
++		struct brcmf_pcie_ringbuf *ring = devinfo->shared.commonrings[i];
++
++		if (!ring)
++			continue;
++		dev_info(dev, H1B_PREFIX "ring %d: depth %u item %u iova %pad host r/w %u/%u device r %u w %u\n", i,
++			 ring->commonring.depth, ring->commonring.item_len, &ring->dma_handle,
++			 ring->commonring.r_ptr, ring->commonring.w_ptr,
++			 devinfo->read_ptr(devinfo, ring->r_idx_addr), devinfo->read_ptr(devinfo, ring->w_idx_addr));
++	}
++	/* Ring 0 = control submit (host writes), ring 2 = control complete (device writes). */
++	for (i = 0; i <= 2; i += 2) {
++		struct brcmf_pcie_ringbuf *ring = devinfo->shared.commonrings[i];
++
++		if (ring && ring->commonring.buf_addr && ring->commonring.item_len >= 32)
++			dev_info(dev, H1B_PREFIX "ring %d first item: %*phN\n", i, 32, ring->commonring.buf_addr);
++	}
++	if (devinfo->shared.scratch)
++		dev_info(dev, H1B_PREFIX "d2h scratch (device-written via DMA): %*phN\n", 8, devinfo->shared.scratch);
++}
++#else
++static inline void h1b_log_domain(struct brcmf_pciedev_info *devinfo) { }
++static inline void h1b_log_dma(struct brcmf_pciedev_info *devinfo, const char *what, dma_addr_t iova, u32 size) { }
++static inline void h1b_log_msi(struct brcmf_pciedev_info *devinfo, const char *when) { }
++static inline void h1b_isr_note(struct brcmf_pciedev_info *devinfo, int irq, u32 status) { }
++static inline void h1b_dump_rings(struct brcmf_pciedev_info *devinfo, const char *why) { }
++#endif
++
+ static irqreturn_t brcmf_pcie_isr_thread(int irq, void *arg)
+ {
+ 	struct brcmf_pciedev_info *devinfo = (struct brcmf_pciedev_info *)arg;
+@@ -946,6 +1052,7 @@
+ 	devinfo->in_irq = true;
+ 	status = brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->mailboxint);
+ 	brcmf_dbg(PCIE, "Enter %x\n", status);
++	h1b_isr_note(devinfo, irq, status);
+ 	if (status) {
+ 		brcmf_pcie_write_reg32(devinfo, devinfo->reginfo->mailboxint,
+ 				       status);
+@@ -975,6 +1082,7 @@
+ 	brcmf_dbg(PCIE, "Enter\n");
+ 
+ 	pci_enable_msi(pdev);
++	h1b_log_msi(devinfo, "after pci_enable_msi");
+ 	if (request_threaded_irq(pdev->irq, brcmf_pcie_quick_check_isr,
+ 				 brcmf_pcie_isr_thread, IRQF_SHARED,
+ 				 "brcmf_pcie_intr", devinfo)) {
+@@ -983,6 +1091,7 @@
+ 		return -EIO;
+ 	}
+ 	devinfo->irq_allocated = true;
++	h1b_log_msi(devinfo, "after request_irq");
+ 	return 0;
+ }
+ 
+@@ -1118,6 +1227,7 @@
+ 	if (!ring)
+ 		return NULL;
+ 
++	h1b_log_dma(devinfo, "ring", *dma_handle, size);
+ 	address = (u64)*dma_handle;
+ 	brcmf_pcie_write_tcm32(devinfo, tcm_dma_phys_addr,
+ 			       address & 0xffffffff);
+@@ -1413,6 +1523,8 @@
+ 	if (!devinfo->shared.scratch)
+ 		goto fail;
+ 
++	h1b_log_domain(devinfo);
++	h1b_log_dma(devinfo, "scratch", devinfo->shared.scratch_dmahandle, BRCMF_DMA_D2H_SCRATCH_BUF_LEN);
+ 	addr = devinfo->shared.tcm_base_address +
+ 	       BRCMF_SHARED_DMA_SCRATCH_ADDR_OFFSET;
+ 	address = (u64)devinfo->shared.scratch_dmahandle;
+@@ -1430,6 +1542,7 @@
+ 	if (!devinfo->shared.ringupd)
+ 		goto fail;
+ 
++	h1b_log_dma(devinfo, "ringupd", devinfo->shared.ringupd_dmahandle, BRCMF_DMA_D2H_RINGUPD_BUF_LEN);
+ 	addr = devinfo->shared.tcm_base_address +
+ 	       BRCMF_SHARED_DMA_RINGUPD_ADDR_OFFSET;
+ 	address = (u64)devinfo->shared.ringupd_dmahandle;
+@@ -1516,6 +1629,7 @@
+ 	struct brcmf_pciedev *buspub = bus_if->bus_priv.pcie;
+ 	struct brcmf_pciedev_info *devinfo = buspub->devinfo;
+ 
++	h1b_dump_rings(devinfo, "firmware declared dead");
+ 	brcmf_dbg(PCIE, "dump at 0x%08X: len=%zu\n", devinfo->ci->rambase, len);
+ 	brcmf_pcie_copy_dev_tomem(devinfo, devinfo->ci->rambase, data, len);
+ 	return 0;

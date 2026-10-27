@@ -1,0 +1,186 @@
+diff --git a/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml b/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
+--- a/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
++++ b/Documentation/devicetree/bindings/pci/apple,t7000-pcie.yaml
+@@ -46,6 +46,16 @@
+       driver allocates one vector per device, only from port 1's slice (vectors 8..15),
+       and composes the message with data equal to the global vector number.
+ 
++  apple,iova-window:
++    $ref: /schemas/types.yaml#/definitions/uint64-array
++    minItems: 2
++    maxItems: 2
++    description: |
++      IOVA window [start, end) in which the controller's DART translates DMA (the ADT
++      dart `vm-offset` and `vm-offset + vm-size`; [0x80000000, 0xbffff000) on J81). The
++      Apple DART uses it as the DMA aperture of every PCI device behind the controller.
++      When absent no window is enforced.
++
+ additionalProperties: true
+ 
+ examples:
+@@ -54,6 +64,7 @@
+       compatible = "apple,t7000-pcie";
+       apple,reg-on-pmic = <&d2207>;
+       apple,msi-doorbell = <0x0 0xbffff000>;
++      apple,iova-window = <0x0 0x80000000 0x0 0xbffff000>;
+       msi-controller;
+       msi-parent = <&pcie>;
+       msi-ranges = <&aic AIC_IRQ 224 IRQ_TYPE_EDGE_RISING 32>;
+diff --git a/arch/arm64/boot/dts/apple/t7001-air2.dtsi b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -199,6 +199,13 @@
+ 	apple,msi-doorbell = <0x0 0xbffff000>;
+ 
+ 	/*
++	 * IOVA window the PCIe DART translates in Apple's configuration (ADT dart-apcie1
++	 * vm-offset 0x80000000, vm-size 0x3ffff000); it ends at the doorbell page above.
++	 * The DART restricts DMA mappings of the devices behind this controller to it.
++	 */
++	apple,iova-window = <0x0 0x80000000 0x0 0xbffff000>;
++
++	/*
+ 	 * The controller's 32 hardware MSI vectors are AIC lines 224..255 (ADT
+ 	 * `msi-vector-offset` 224, `#msi-vectors` 32; the AIC reports 256 IRQs). Port 1 owns
+ 	 * vectors 8..15. These three properties are declared together with the driver's
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -311,6 +311,13 @@
+ 	u32 supports_bypass : 1;
+ 
+ 	/*
++	 * Set when the DMA window came from the PCIe controller's `apple,iova-window` (patch 0063)
++	 * and when that controller asks for the raw, un-rebased model (no `apple,iova-rebase`).
++	 */
++	u32 pci_window : 1;
++	u32 no_rebase : 1;
++
++	/*
+ 	 * DMA aperture start and end to be overridden by "iommus"' phandle
+ 	 * args. By default determined by DART's ias but may be outside of it.
+ 	 */
+@@ -691,6 +698,16 @@
+ 	stream_map->dart->hw->invalidate_tlb(stream_map);
+ }
+ 
++/*
++ * Clearing dma_min's bits equals subtracting dma_min only when every address of the aperture
++ * carries all of them, i.e. the aperture lies inside the block that dma_min's lowest set bit
++ * opens (0x80000000 opens [0x80000000, 0x100000000)). Otherwise the rebase would alias pages.
++ */
++static bool apple_dart_rebase_valid(dma_addr_t dma_min, dma_addr_t dma_max)
++{
++	return !dma_min || (dma_max - dma_min) < (dma_min & -dma_min);
++}
++
+ static int apple_dart_finalize_domain(struct apple_dart_domain *dart_domain,
+ 				      struct apple_dart_master_cfg *cfg)
+ {
+@@ -730,10 +747,21 @@
+ 		goto done;
+ 	}
+ 
+-	if (dart->hw->type == DART_S5L8960X)
++	if (dart->hw->type == DART_S5L8960X && cfg->pci_window && cfg->no_rebase) {
++		/* Raw model: the PTE index is the IOVA itself, inside the controller's window. */
++		dart_domain->mask = DMA_BIT_MASK(pgtbl_cfg.ias);
++	} else if (dart->hw->type == DART_S5L8960X) {
++		/* Apple's rebase: clearing dma_min's bits subtracts it (checked for window users). */
++		if (cfg->pci_window && !apple_dart_rebase_valid(cfg->dma_min, cfg->dma_max)) {
++			free_io_pgtable_ops(dart_domain->pgtbl_ops);
++			dart_domain->pgtbl_ops = NULL;
++			ret = -EINVAL;
++			goto done;
++		}
+ 		dart_domain->mask = ~cfg->dma_min;
+-	else
++	} else {
+ 		dart_domain->mask = DMA_BIT_MASK(pgtbl_cfg.ias);
++	}
+ 
+ 	dart_domain->domain.pgsize_bitmap = pgtbl_cfg.pgsize_bitmap;
+ 	dart_domain->domain.geometry.aperture_start = cfg->dma_min;
+@@ -907,6 +935,44 @@
+ 	kfree(dart_domain);
+ }
+ 
++/*
++ * Per-controller IOVA window for PCI devices (patch 0063). The T7000 PCIe DART translates only
++ * [vm-offset, vm-offset + vm-size) in Apple's configuration (J81: [0x80000000, 0xbffff000),
++ * immediately below the MSI doorbell page), and Apple's software rebases IOVAs to PTE page 0 by
++ * subtracting vm-offset. A PCI device behind `iommu-map` cannot carry a window in its iommu
++ * specifier, so the window comes from the host bridge's node: `apple,iova-window` = <start end>
++ * (two 64-bit values, end exclusive), plus the boolean `apple,iova-rebase` to select Apple's
++ * rebased PTE indexing (without it the raw, un-rebased indexing is used inside the same window).
++ */
++static struct device_node *apple_dart_pci_bridge_node(struct device *dev)
++{
++	struct pci_host_bridge *bridge = pci_find_host_bridge(to_pci_dev(dev)->bus);
++	struct device *parent = bridge ? bridge->dev.parent : NULL;
++
++	return parent ? parent->of_node : NULL;
++}
++
++static bool apple_dart_pci_iova_window(struct device *dev, u64 *start, u64 *end)
++{
++	struct device_node *np = apple_dart_pci_bridge_node(dev);
++
++	return np && !of_property_read_u64_index(np, "apple,iova-window", 0, start) &&
++	       !of_property_read_u64_index(np, "apple,iova-window", 1, end);
++}
++
++/* Window [start, end) as an inclusive DMA range inside the DART's address space. */
++static int apple_dart_window_range(u64 start, u64 end, u32 pgsize, u32 ias,
++				   dma_addr_t *dma_min, dma_addr_t *dma_max)
++{
++	if (start >= end || !IS_ALIGNED(start, pgsize) || !IS_ALIGNED(end, pgsize))
++		return -EINVAL;
++	if (end - 1 > DMA_BIT_MASK(ias))
++		return -EINVAL;
++	*dma_min = start;
++	*dma_max = end - 1;
++	return 0;
++}
++
+ static int apple_dart_of_xlate(struct device *dev,
+ 			       const struct of_phandle_args *args)
+ {
+@@ -916,6 +982,7 @@
+ 	struct apple_dart *cfg_dart;
+ 	dma_addr_t dma_max = DMA_BIT_MASK(dart->ias);
+ 	dma_addr_t dma_min = 0;
++	bool pci_window = false, no_rebase = false;
+ 	int i, sid;
+ 
+ 	put_device(&iommu_pdev->dev);
+@@ -955,6 +1022,20 @@
+ 		}
+ 	}
+ 
++	if (args->args_count == 1 && dev_is_pci(dev)) {
++		u64 win_start, win_end;
++
++		if (apple_dart_pci_iova_window(dev, &win_start, &win_end)) {
++			if (apple_dart_window_range(win_start, win_end, dart->pgsize, dart->ias,
++						    &dma_min, &dma_max)) {
++				dev_err(dev, "Invalid apple,iova-window %#llx..%#llx\n", win_start, win_end);
++				return -EINVAL;
++			}
++			pci_window = true;
++			no_rebase = !of_property_read_bool(apple_dart_pci_bridge_node(dev), "apple,iova-rebase");
++		}
++	}
++
+ 	if (!cfg) {
+ 		cfg = kzalloc_obj(*cfg);
+ 		if (!cfg)
+@@ -964,6 +1045,8 @@
+ 		/* Will be merged with other DARTs to the common range. */
+ 		cfg->dma_min = dma_min;
+ 		cfg->dma_max = dma_max;
++		cfg->pci_window = pci_window;
++		cfg->no_rebase = no_rebase;
+ 	} else {
+ 		if (dma_min >= cfg->dma_max || cfg->dma_min >= dma_max) {
+ 			dev_err(dev, "non-overlapping DMA windows: %pad..%pad, %pad..%pad\n",

@@ -1,0 +1,53 @@
+--- a/arch/arm64/boot/dts/apple/t7001.dtsi	2026-09-09 15:53:30
++++ b/arch/arm64/boot/dts/apple/t7001.dtsi	2026-09-09 15:53:56
+@@ -194,6 +194,33 @@
+ 			status = "disabled";
+ 		};
+ 
++		/*
++		 * TOUCH-1 (docs/plans/2026-09-09-j81-touch-spi3.md): the touch
++		 * controller's SPI transport. Register base 0x20a08c000, IRQ
++		 * 155 and clock gate 0x4d confirmed against the real J81 ADT
++		 * capture, same decode method as serial3/serial5 above.
++		 * Compatible "apple,s5l8960x-spi" matches the real string
++		 * used in Hoolock's tests/kat-spi experiment (commit
++		 * c065201), which this board's driver support is ported
++		 * from -- see kernel/patches/0007-spi-apple-add-s5l8960x-support.patch.
++		 * No touch child node here yet -- this stage only proves the
++		 * controller itself registers and can do a bounded transfer.
++		 */
++		spi3: spi@20a08c000 {
++			compatible = "apple,s5l8960x-spi";
++			reg = <0x2 0x0a08c000 0x0 0x4000>;
++			interrupt-parent = <&aic>;
++			interrupts = <AIC_IRQ 155 IRQ_TYPE_LEVEL_HIGH>;
++			/* Use the bootloader-enabled clocks for now. */
++			clocks = <&clkref>;
++			power-domains = <&ps_spi3>;
++			pinctrl-0 = <&spi3_pins>;
++			pinctrl-names = "default";
++			#address-cells = <1>;
++			#size-cells = <0>;
++			status = "disabled";
++		};
++
+ 		i2c0: i2c@20a110000 {
+ 			compatible = "apple,t7000-i2c", "apple,i2c";
+ 			reg = <0x2 0x0a110000 0x0 0x1000>;
+@@ -411,4 +438,16 @@
+ 			};
++
++			/*
++			 * AP GPIO 51, provisional function 1 (SPI3 CS0).
++			 * The real J81 ADT identifies the pin, but BAT-4
++			 * proved that an OIPG flags byte is not a direct
++			 * Apple pinmux selector. Verify this function with a
++			 * bounded live A/B test before enabling a touch child.
++			 * See docs/plans/2026-09-09-j81-touch-spi3.md.
++			 */
++			spi3_pins: spi3-pins {
++				pinmux = <APPLE_PINMUX(51, 1)>;
++			};
+ 		};
+ 	};
+ 

@@ -1,0 +1,86 @@
+{
+  "device": "iPad5,3",
+  "version": "8.1",
+  "build": "12B410",
+  "ipsw_url": "http://appldnld.apple.com/iOS8.1/031-09027.20141020.TLRqV/iPad5,3_8.1_12B410_Restore.ipsw",
+  "ipsw_bytes": 2178168430,
+  "ipsw_sha256": "d9cb4feda3d98fdb3c1d92713bac2bc6f5d1f317a2707770a248cbd1829ebc07",
+  "preparation": {
+    "mode": "manual-source-only",
+    "entrypoint": "firmware/j81/prepare-assets",
+    "rootfs_extractor": "firmware/j81/prepare_firmware.py",
+    "rootfs_member": "058-01629-167.dmg",
+    "rootfs_decrypted_bytes": 2123313195,
+    "rootfs_decrypted_sha256": "b187f71f38d53e227cfbd2bacb3bb76b55c19f5c7285e913b2154e467ad965bb",
+    "orchard_adapter": false,
+    "note": "The encrypted RootFS requires the Mac extraction helper; generic IPSW extraction patterns are insufficient. The public helper retrieves and verifies a public RootFS key without storing it in this repository. Firmware selection requires the owner-device radio/ADT evidence and is separate from generic asset preparation."
+  },
+  "extract_patterns": [
+    "^058-01629-167[.]dmg$"
+  ],
+  "qualification": {
+    "stepping": "C2",
+    "platform": "rieslinga",
+    "module": "CIDR",
+    "vendor": "u",
+    "version": "2.1",
+    "selection_policy": "Observed on the qualified device, never a default for another unit."
+  },
+  "files": [
+    {
+      "name": "rieslinga.trx",
+      "source_path": "usr/share/firmware/wifi/C-4350__s-C2/rieslinga.trx",
+      "sha256": "e42b32ab33fcadfaa34414a8ea2c6f90f7931c9a194dad207095275fe3493177",
+      "destination": "lib/firmware/brcm/brcmfmac4350c2-pcie.bin"
+    },
+    {
+      "name": "rieslinga.clmb",
+      "source_path": "usr/share/firmware/wifi/C-4350__s-C2/rieslinga.clmb",
+      "sha256": "f1a77b5d933be97f472530c10c9c8d3ae204e8977c32275a113798c00cb2fa66",
+      "destination": "lib/firmware/brcm/brcmfmac4350c2-pcie.clm_blob"
+    },
+    {
+      "name": "rieslinga.txcb",
+      "source_path": "usr/share/firmware/wifi/C-4350__s-C2/rieslinga.txcb",
+      "sha256": "9d270addd113628f9d30fe89a7cbd27ce127503343b5e7bb1ba7b1072cd1722a",
+      "destination": "lib/firmware/brcm/brcmfmac4350c2-pcie.txcap_blob"
+    }
+  ],
+  "generated": [
+    {
+      "name": "brcmfmac4350c2-pcie.txt",
+      "destination": "lib/firmware/brcm/brcmfmac4350c2-pcie.txt",
+      "generator": "j81-nvram-normalize",
+      "source_script": "firmware/j81/prepare_firmware.py:normalize_nvram",
+      "qualified_source_path": "usr/share/firmware/wifi/C-4350__s-C2/P-rieslinga_M-CIDR_V-u__m-2.1.txt",
+      "note": "Normalize only the exact file selected by the current unit radio evidence. A source MAC assignment is rejected. m1n1 supplies the owner device MAC through the wifi0 device-tree node."
+    }
+  ],
+  "private_inputs": [
+    {
+      "name": "owner-apple-device-tree",
+      "required": true,
+      "required_for": [
+        "platform validation",
+        "real Wi-Fi MAC provisioning"
+      ],
+      "allow_reference_fallback": false,
+      "publish": false
+    },
+    {
+      "name": "owner-radio-otp-shadow",
+      "required": true,
+      "required_for": [
+        "BCM4350 stepping and board selector identification"
+      ],
+      "allow_reference_fallback": false,
+      "publish": false
+    }
+  ],
+  "not_qualified": [
+    "Bluetooth firmware or pairing",
+    "touchscreen firmware/calibration",
+    "audio firmware",
+    "WPA3-only association"
+  ]
+}

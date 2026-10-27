@@ -1,0 +1,167 @@
+diff --git a/drivers/iommu/Kconfig b/drivers/iommu/Kconfig
+--- a/drivers/iommu/Kconfig
++++ b/drivers/iommu/Kconfig
+@@ -315,6 +315,15 @@
+ 
+ 	  Say Y here if you are using an Apple SoC.
+ 
++config APPLE_DART_H1B_DIAG
++	bool "Read-only DART register dump in debugfs for the J81 Wi-Fi bring-up (test kernels only)"
++	depends on APPLE_DART && DEBUG_FS
++	help
++	  Exposes the S5L8960X DART's translation control, latched error
++	  status and address, and TTBR registers read-only under
++	  /sys/kernel/debug/apple-dart-*/regs. Writes nothing. Not for
++	  production kernels.
++
+ config S390_IOMMU
+ 	def_bool y if S390 && PCI
+ 	depends on S390 && PCI
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -33,6 +33,10 @@
+ #include <linux/swab.h>
+ #include <linux/types.h>
+ 
++#ifdef CONFIG_APPLE_DART_H1B_DIAG
++#include <linux/debugfs.h>
++#endif
++
+ #include "dma-iommu.h"
+ 
+ #define DART_MAX_STREAMS 256
+@@ -1321,6 +1325,44 @@
+ 	return IRQ_HANDLED;
+ }
+ 
++#ifdef CONFIG_APPLE_DART_H1B_DIAG
++/*
++ * Read-only register dump for the J81 Wi-Fi bring-up (patch 0066), S5L8960X only: the translation
++ * control, the latched error status and address (reading them does not clear anything; the fault flag
++ * is cleared by a write in the interrupt handler) and the four TTBRs of each of the four streams.
++ * Exposed as /sys/kernel/debug/apple-dart-<dev>/regs so a failed DMA run can be inspected afterwards.
++ */
++static void apple_dart_h1b_debugfs(struct apple_dart *dart)
++{
++	static const struct debugfs_reg32 regs[] = {
++		{ "tcr", DART_S5L8960X_TCR },
++		{ "error", DART_S5L8960X_ERROR },
++		{ "error_addr", DART_S5L8960X_ERROR_ADDR },
++		{ "ttbr_s0_0", DART_S5L8960X_TTBR + 0x00 }, { "ttbr_s0_1", DART_S5L8960X_TTBR + 0x04 },
++		{ "ttbr_s0_2", DART_S5L8960X_TTBR + 0x08 }, { "ttbr_s0_3", DART_S5L8960X_TTBR + 0x0c },
++		{ "ttbr_s1_0", DART_S5L8960X_TTBR + 0x10 }, { "ttbr_s1_1", DART_S5L8960X_TTBR + 0x14 },
++		{ "ttbr_s1_2", DART_S5L8960X_TTBR + 0x18 }, { "ttbr_s1_3", DART_S5L8960X_TTBR + 0x1c },
++	};
++	struct debugfs_regset32 *regset;
++	struct dentry *dir;
++	char *name;
++
++	if (dart->hw->type != DART_S5L8960X)
++		return;
++	regset = devm_kzalloc(dart->dev, sizeof(*regset), GFP_KERNEL);
++	name = devm_kasprintf(dart->dev, GFP_KERNEL, "apple-dart-%s", dev_name(dart->dev));
++	if (!regset || !name)
++		return;
++	regset->regs = regs;
++	regset->nregs = ARRAY_SIZE(regs);
++	regset->base = dart->regs;
++	dir = debugfs_create_dir(name, NULL);
++	debugfs_create_regset32("regs", 0444, dir, regset);
++}
++#else
++static inline void apple_dart_h1b_debugfs(struct apple_dart *dart) { }
++#endif
++
+ static int apple_dart_probe(struct platform_device *pdev)
+ {
+ 	int ret;
+@@ -1420,6 +1462,8 @@
+ 	ret = iommu_device_register(&dart->iommu, &apple_dart_iommu_ops, dev);
+ 	if (ret)
+ 		goto err_sysfs_remove;
++
++	apple_dart_h1b_debugfs(dart);
+ 
+ 	dev_info(
+ 		&pdev->dev,
+diff --git a/drivers/pci/controller/Kconfig b/drivers/pci/controller/Kconfig
+--- a/drivers/pci/controller/Kconfig
++++ b/drivers/pci/controller/Kconfig
+@@ -72,6 +72,16 @@
+ 
+ 	  If unsure, say N.
+ 
++config PCIE_APPLE_T7000_DEBUGFS_DIAG
++	bool "Read-only port-1 register dump in debugfs (J81 Wi-Fi bring-up, test kernels only)"
++	depends on PCIE_APPLE_T7000 && DEBUG_FS
++	help
++	  Exposes the controller's port-1 link, event status/mask and MSI
++	  registers read-only as /sys/kernel/debug/t7000-pcie/port1_regs.
++	  Writes nothing. Not for production kernels.
++
++	  If unsure, say N.
++
+ config PCI_VERSATILE
+ 	bool "ARM Versatile PB PCI controller"
+ 	depends on ARCH_VERSATILE || COMPILE_TEST
+diff --git a/drivers/pci/controller/pcie-apple-t7000.c b/drivers/pci/controller/pcie-apple-t7000.c
+--- a/drivers/pci/controller/pcie-apple-t7000.c
++++ b/drivers/pci/controller/pcie-apple-t7000.c
+@@ -49,6 +49,9 @@
+ #include <linux/bitmap.h>
+ #include <linux/bitops.h>
+ #include <linux/build_bug.h>
++#ifdef CONFIG_PCIE_APPLE_T7000_DEBUGFS_DIAG
++#include <linux/debugfs.h>
++#endif
+ #include <linux/delay.h>
+ #include <linux/err.h>
+ #include <linux/gpio/consumer.h>
+@@ -613,6 +616,37 @@
+ 		cap_ptr, old, new, readback);
+ }
+ 
++#ifdef CONFIG_PCIE_APPLE_T7000_DEBUGFS_DIAG
++/*
++ * Read-only dump of port 1's controller registers for the J81 Wi-Fi bring-up (patch 0066), as
++ * /sys/kernel/debug/t7000-pcie/port1_regs: link control and state, the port event status and mask
++ * (+0x100/+0x104; the iOS handler reads status and acknowledges with a separate write, so reading
++ * is side-effect free), the MSI configuration and the M1-named doorbell register that iOS never
++ * programs (+0x168, read as 0 on this hardware). Nothing here writes.
++ */
++static void t7000_pcie_debugfs(struct device *dev, void __iomem *ctrl)
++{
++	static const struct debugfs_reg32 regs[] = {
++		{ "link_start_0x80", 0x080 }, { "state_0x88", 0x088 }, { "state_0x8c", 0x08c },
++		{ "event_status_0x100", 0x100 }, { "event_mask_0x104", 0x104 },
++		{ "msicfg_0x124", 0x124 }, { "msibase_0x128", 0x128 }, { "msiaddr_0x168", 0x168 },
++	};
++	struct debugfs_regset32 *regset;
++	struct dentry *dir;
++
++	regset = devm_kzalloc(dev, sizeof(*regset), GFP_KERNEL);
++	if (!regset)
++		return;
++	regset->regs = regs;
++	regset->nregs = ARRAY_SIZE(regs);
++	regset->base = ctrl;
++	dir = debugfs_create_dir("t7000-pcie", NULL);
++	debugfs_create_regset32("port1_regs", 0444, dir, regset);
++}
++#else
++static inline void t7000_pcie_debugfs(struct device *dev, void __iomem *ctrl) { }
++#endif
++
+ static int apple_t7000_pcie_init(struct pci_config_window *cfg)
+ {
+ 	struct device *dev = cfg->parent;
+@@ -668,6 +702,8 @@
+ 	t7000_pcie_set_link_start(dev, ctrl, T7000_PCIE_J81_PORT);
+ 
+ 	t7000_pcie_wait_link_active(dev, cfg, ctrl);
++
++	t7000_pcie_debugfs(dev, ctrl);
+ 
+ 	dev_dbg(dev, "t7000-pcie: init complete, handing back to the generic ECAM core\n");
+ 

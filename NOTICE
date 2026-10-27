@@ -1,0 +1,45 @@
+J81 hardware handoff — component attribution
+
+Linux kernel and kernel patches:
+  HoolockLinux/linux, commit 6831bc701a6ce059e71e5aaa9488c9195bea6927.
+  J81 patch/recipe work from mattonik/ipad-nixos,
+  commit b94d42f78e04c5465e290340a5b6879bbc5956b6.
+  Linux COPYING, GPL-2.0 and Linux-syscall-note texts are retained in LICENSES.
+  The iPad NixOS project's MIT notice is retained for its project-level source;
+  Linux-derived patch files retain their kernel licensing and existing notices.
+
+Hoolock m1n1:
+  Source commit d5a10ac52a6468484854419a6c5130f1d62073eb, MIT.
+  Only a source/build reference and binary checksum are included here.
+
+PongoOS:
+  The qualified Hoolock prebuilt input's checksum and source reference are
+  recorded; no Pongo binary is distributed in this tree. The retained Pongo
+  license describes the inspected source, not a claim to have rebuilt that
+  particular prebuilt binary.
+
+Minimal BusyBox/musl userspace:
+  Reconstructed from hash-pinned SoMainline linux-apple-resources input,
+  commit 30780ec0fecdab849bb812e1dde52b87e614f45b. No BusyBox/musl binaries are
+  stored here. BusyBox is GPL-2.0; musl is MIT. The input's original startup
+  scripts are excluded by the reconstruction code. Binary redistributors must
+  preserve matching notices and satisfy the applicable source obligations.
+
+Firmware preparation:
+  The extraction/assembly design adapts the iPad NixOS private-firmware work;
+  its MIT notice is retained. Apple firmware and public RootFS decryption-key
+  bytes are not included. Original source archives and private device data
+  stay on the owner's host.
+
+Host and RAM-session glue:
+  Existing J81 Wi-Fi RAM test contributors' MIT notice is retained.
+  The new explicit-path build/assembly/extraction adapters and handoff
+  documentation are supplied under that same MIT license.
+
+Desktop reference:
+  OrchardLinux/omarchy-a v0.1.0, commit
+  56e123a2c708c589f463d5262c36f28ddf2d9b2b, supplied the separately qualified
+  userspace. This hardware tree distributes no Omarchy rootfs, graphics
+  binaries, Apple drivers, proprietary firmware or upstream distribution image.
+
+No ownership of third-party hardware drivers or their research is claimed.

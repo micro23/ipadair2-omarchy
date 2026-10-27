@@ -1,0 +1,207 @@
+[
+  {
+    "file": "binutils-aarch64-linux-gnu_2.42-4ubuntu2.10_amd64.deb",
+    "metadata": "Package: binutils-aarch64-linux-gnu\nVersion: 2.42-4ubuntu2.10\nArchitecture: amd64",
+    "sha256": "6bb25a05c50681e240b453f6572d8066f2358dee984d0ff1dbcd08852642adf2"
+  },
+  {
+    "file": "binutils-common_2.42-4ubuntu2.10_amd64.deb",
+    "metadata": "Package: binutils-common\nVersion: 2.42-4ubuntu2.10\nArchitecture: amd64",
+    "sha256": "d136073f5e2153f3df11c1d08d66727b9466b28ff483f50085f14bbe3464b5ee"
+  },
+  {
+    "file": "binutils-x86-64-linux-gnu_2.42-4ubuntu2.10_amd64.deb",
+    "metadata": "Package: binutils-x86-64-linux-gnu\nVersion: 2.42-4ubuntu2.10\nArchitecture: amd64",
+    "sha256": "1e510a15f30208d39edcd840e48f26a77bbca7c417805eeccb1e3f7de198ef29"
+  },
+  {
+    "file": "binutils_2.42-4ubuntu2.10_amd64.deb",
+    "metadata": "Package: binutils\nVersion: 2.42-4ubuntu2.10\nArchitecture: amd64",
+    "sha256": "b3b5a84181a38fd191820b2cdcc1a3eeb1cd6333ad472f2092f96e81047e9c74"
+  },
+  {
+    "file": "bison_2%3a3.8.2+dfsg-1ubuntu0.24.04.1_amd64.deb",
+    "metadata": "Package: bison\nVersion: 2:3.8.2+dfsg-1ubuntu0.24.04.1\nArchitecture: amd64",
+    "sha256": "9d75084d1293f68f3c1a2ee677dea5baa4e010bac2d4c455d8e23177e97aa353"
+  },
+  {
+    "file": "cpio_2.15+dfsg-1ubuntu2.1_amd64.deb",
+    "metadata": "Package: cpio\nVersion: 2.15+dfsg-1ubuntu2.1\nArchitecture: amd64",
+    "sha256": "fbac731755302d218d785b4c391530e7773527f553e24946f9580636a47641b2"
+  },
+  {
+    "file": "cpp-13-aarch64-linux-gnu_13.3.0-6ubuntu2~24.04.1cross1_amd64.deb",
+    "metadata": "Package: cpp-13-aarch64-linux-gnu\nVersion: 13.3.0-6ubuntu2~24.04.1cross1\nArchitecture: amd64",
+    "sha256": "6aafe2a7820e497263d871519326dc3e5bcecc0583cc49852c05abda8c1d2e55"
+  },
+  {
+    "file": "cpp-aarch64-linux-gnu_4%3a13.2.0-7ubuntu1_amd64.deb",
+    "metadata": "Package: cpp-aarch64-linux-gnu\nVersion: 4:13.2.0-7ubuntu1\nArchitecture: amd64",
+    "sha256": "2a56cc0ab879a5751c9b517f228ca0a532447812bf80745f65df4b2f91163b1e"
+  },
+  {
+    "file": "device-tree-compiler_1.7.0-2build1_amd64.deb",
+    "metadata": "Package: device-tree-compiler\nVersion: 1.7.0-2build1\nArchitecture: amd64",
+    "sha256": "b2c1e8c86f18b6bda26408f92bfb9ec1a1e40bfdc41f1034600ccd68e82d2ed7"
+  },
+  {
+    "file": "flex_2.6.4-8.2build1_amd64.deb",
+    "metadata": "Package: flex\nVersion: 2.6.4-8.2build1\nArchitecture: amd64",
+    "sha256": "c5604f55827b50e3f568b4731b7799f86b147454c867be02bc141d9d8ce561ff"
+  },
+  {
+    "file": "gcc-13-aarch64-linux-gnu-base_13.3.0-6ubuntu2~24.04.1cross1_amd64.deb",
+    "metadata": "Package: gcc-13-aarch64-linux-gnu-base\nVersion: 13.3.0-6ubuntu2~24.04.1cross1\nArchitecture: amd64",
+    "sha256": "2246058ef9d122c26c9ae9b2ab6843d2504806e68e45c7842dd30dda15e94723"
+  },
+  {
+    "file": "gcc-13-aarch64-linux-gnu_13.3.0-6ubuntu2~24.04.1cross1_amd64.deb",
+    "metadata": "Package: gcc-13-aarch64-linux-gnu\nVersion: 13.3.0-6ubuntu2~24.04.1cross1\nArchitecture: amd64",
+    "sha256": "154d549389d13010bc0ef2e89c7870e22c4193afa69335f8e57c5fc891e75578"
+  },
+  {
+    "file": "gcc-13-cross-base_13.3.0-6ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: gcc-13-cross-base\nVersion: 13.3.0-6ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "02676468c2f71d57be2fbd6e6f74462ab419a49db15a1b1f031b2460a2954cd3"
+  },
+  {
+    "file": "gcc-14-cross-base_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: gcc-14-cross-base\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "ed29eff7b53f6c6b10c42bb9539487d1867f119e84f5f678c02411a34b5c09f3"
+  },
+  {
+    "file": "gcc-aarch64-linux-gnu_4%3a13.2.0-7ubuntu1_amd64.deb",
+    "metadata": "Package: gcc-aarch64-linux-gnu\nVersion: 4:13.2.0-7ubuntu1\nArchitecture: amd64",
+    "sha256": "4e6c8886c95e5dc4a96e092e5431bbd3c1a2a265cd388a65599fe8d15fbe712a"
+  },
+  {
+    "file": "libasan8-arm64-cross_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: libasan8-arm64-cross\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "7e65c44cda6a9c3be17f5042fe1f0e403d9c959797f3d876345a9c66310724d3"
+  },
+  {
+    "file": "libatomic1-arm64-cross_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: libatomic1-arm64-cross\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "1c24a0d6dfcd52492797f8f534a5d696bc70a58e214d16796ec823b417c36ac3"
+  },
+  {
+    "file": "libbinutils_2.42-4ubuntu2.10_amd64.deb",
+    "metadata": "Package: libbinutils\nVersion: 2.42-4ubuntu2.10\nArchitecture: amd64",
+    "sha256": "064dce00ce94e1fc2d33779cb0071088f4c8aac79e85345f2e78a020f7d14699"
+  },
+  {
+    "file": "libc6-arm64-cross_2.39-0ubuntu8cross1_all.deb",
+    "metadata": "Package: libc6-arm64-cross\nVersion: 2.39-0ubuntu8cross1\nArchitecture: all",
+    "sha256": "76547cb8a4d7f057e23dcade45a17fc0f3d5c2fa0d3ff125bca56f7c4ecd7a07"
+  },
+  {
+    "file": "libctf-nobfd0_2.42-4ubuntu2.10_amd64.deb",
+    "metadata": "Package: libctf-nobfd0\nVersion: 2.42-4ubuntu2.10\nArchitecture: amd64",
+    "sha256": "da352eb7fa6c4369d2a6c1e5e680f574eda2e38576563326b18d9e47e61c4078"
+  },
+  {
+    "file": "libctf0_2.42-4ubuntu2.10_amd64.deb",
+    "metadata": "Package: libctf0\nVersion: 2.42-4ubuntu2.10\nArchitecture: amd64",
+    "sha256": "7ec86d697c3668503c85f308a6832f092075b5880ad002f22185264da0bd4645"
+  },
+  {
+    "file": "libelf-dev_0.190-1.1ubuntu0.1_amd64.deb",
+    "metadata": "Package: libelf-dev\nVersion: 0.190-1.1ubuntu0.1\nArchitecture: amd64",
+    "sha256": "81affb95c29f7323f2ae24386aaa1f61d311578e3e27c5f78ef7b7d55cd3cf49"
+  },
+  {
+    "file": "libfdt1_1.7.0-2build1_amd64.deb",
+    "metadata": "Package: libfdt1\nVersion: 1.7.0-2build1\nArchitecture: amd64",
+    "sha256": "274d20dfab9d6b216b5de85446a93f6ce5b2cd82c847b8dfdc508577f76eb96a"
+  },
+  {
+    "file": "libgcc-13-dev-arm64-cross_13.3.0-6ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: libgcc-13-dev-arm64-cross\nVersion: 13.3.0-6ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "eda9d79e18170fd46ee0ed62aa391f52bfe8c1a336d53162f2e1c0a675af548f"
+  },
+  {
+    "file": "libgcc-s1-arm64-cross_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: libgcc-s1-arm64-cross\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "be13b35e1c56c4158817e668f442a363db6f4e13b2ffed1ef6cf91df9961e35d"
+  },
+  {
+    "file": "libgomp1-arm64-cross_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: libgomp1-arm64-cross\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "8186dd15e27cb872f1d4b963c5adc68094e31b20f60a72211492424e0d3512a1"
+  },
+  {
+    "file": "libgprofng0_2.42-4ubuntu2.10_amd64.deb",
+    "metadata": "Package: libgprofng0\nVersion: 2.42-4ubuntu2.10\nArchitecture: amd64",
+    "sha256": "1b7e3c2fc162e8358ca6e5a3fffdb4d0d632f790630323215841bb36a63c0ab8"
+  },
+  {
+    "file": "libhwasan0-arm64-cross_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: libhwasan0-arm64-cross\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "6165c11d179029ae33e12770a6667202f4a6d504b978610c9b3da0b2d165f0d5"
+  },
+  {
+    "file": "libitm1-arm64-cross_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: libitm1-arm64-cross\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "b0b309433d79b119987c3c7b84bbbbbf26650206e1f48d20cd009c4750b67757"
+  },
+  {
+    "file": "liblsan0-arm64-cross_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: liblsan0-arm64-cross\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "b5fd148de67b79fd8308b51270f5cc6eef893d47aaaace297bf4680eeae96e32"
+  },
+  {
+    "file": "libpkgconf3_1.8.1-2build1_amd64.deb",
+    "metadata": "Package: libpkgconf3\nVersion: 1.8.1-2build1\nArchitecture: amd64",
+    "sha256": "fc3a57e8f931ec06cb7c51acc56878f1fec247ff02a7adcab26905c2faeb2792"
+  },
+  {
+    "file": "libsframe1_2.42-4ubuntu2.10_amd64.deb",
+    "metadata": "Package: libsframe1\nVersion: 2.42-4ubuntu2.10\nArchitecture: amd64",
+    "sha256": "72093fb456864db55f1352bfa5e952a94f7abaff64e71dff1fbf001db1984564"
+  },
+  {
+    "file": "libstdc++6-arm64-cross_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: libstdc++6-arm64-cross\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "5b9168ad31befddb46fe1b6af88aa90bec0fc63c0abfb4f9c68c2cfcc2acda95"
+  },
+  {
+    "file": "libtsan2-arm64-cross_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: libtsan2-arm64-cross\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "9a67551170ab1305e6ed4797f90bd0af5a696b0799b43aeac09e4ff11bfced67"
+  },
+  {
+    "file": "libubsan1-arm64-cross_14.2.0-4ubuntu2~24.04.1cross1_all.deb",
+    "metadata": "Package: libubsan1-arm64-cross\nVersion: 14.2.0-4ubuntu2~24.04.1cross1\nArchitecture: all",
+    "sha256": "1a5b3c11901ba5a65b8cadec57ca1af1b567df5bbe7d88d36b2da774fb939a48"
+  },
+  {
+    "file": "libzstd-dev_1.5.5+dfsg2-2build1.1_amd64.deb",
+    "metadata": "Package: libzstd-dev\nVersion: 1.5.5+dfsg2-2build1.1\nArchitecture: amd64",
+    "sha256": "6c9d2b5677a4677e9ead62f74723bb919113621a8028ed543a4d78952d54d165"
+  },
+  {
+    "file": "m4_1.4.19-4build1_amd64.deb",
+    "metadata": "Package: m4\nVersion: 1.4.19-4build1\nArchitecture: amd64",
+    "sha256": "30ea715845a1863abd55d11e47ab91513130bf347852d4cdeae69e9d98fa795c"
+  },
+  {
+    "file": "pkgconf-bin_1.8.1-2build1_amd64.deb",
+    "metadata": "Package: pkgconf-bin\nVersion: 1.8.1-2build1\nArchitecture: amd64",
+    "sha256": "7a812f05ee1610154b433e2ad54f6e4163fcbb306b9fb31afe959afb2e5e1545"
+  },
+  {
+    "file": "pkgconf_1.8.1-2build1_amd64.deb",
+    "metadata": "Package: pkgconf\nVersion: 1.8.1-2build1\nArchitecture: amd64",
+    "sha256": "834a58031069d97d7cfb8b2f5bfd5effc69cecf7f30cc362071875f1f8dc1828"
+  },
+  {
+    "file": "libelf1t64_0.190-1.1ubuntu0.1_amd64.deb",
+    "metadata": "Package: libelf1t64\nVersion: 0.190-1.1ubuntu0.1\nArchitecture: amd64",
+    "sha256": "b4aee123a37472d213647594b4f7d4a0d13615b0ca2a6fd33926b768d6b232c2"
+  },
+  {
+    "file": "bc_1.07.1-3ubuntu4_amd64.deb",
+    "metadata": "Package: bc\nVersion: 1.07.1-3ubuntu4\nArchitecture: amd64",
+    "sha256": "cb85d5929476088533b3c5e1db2de5ab4593a69fa54243710f762197dbaea60d"
+  }
+]

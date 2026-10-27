@@ -1,0 +1,48 @@
+diff --git a/drivers/pci/controller/pcie-apple-t7000.c b/drivers/pci/controller/pcie-apple-t7000.c
+--- a/drivers/pci/controller/pcie-apple-t7000.c
++++ b/drivers/pci/controller/pcie-apple-t7000.c
+@@ -95,6 +95,12 @@
+ #define T7000_PCIE_TUNE_CONFIG_B	0x130
+ #define T7000_PCIE_TUNE_CONFIG_C	0x134
+ #define T7000_PCIE_TUNE_DBI_C		0xb44
++
++/* Apple configRead32 resolves port 1's DBI gate selector 0x08000800
++ * and low offset 0x0bc to cfg->win + 0x88bc (ADT reg index 0).
++ */
++#define T7000_PCIE_DBI_GATE_SELECTOR		0x08000800
++#define T7000_PCIE_DBI_GATE_ECAM_OFFSET	0x88bc
+ 
+ /* Board port 1 is J81's only populated port; this driver never touches
+  * ports 2-4.
+@@ -277,6 +283,22 @@
+ 	t7000_pcie_log_tuning_baseline(dev, ctrl, port);
+ 
+ 	return 0;
++}
++
++/*
++ * Stage 5B mapping gate: read the DBI write-enable control through the
++ * already-mapped generic ECAM window. Apple builds this address with its
++ * configRead32 accessor. This is intentionally read only: the saved|1
++ * write, DBI RMWs, and restore remain deferred until observed on J81.
++ */
++static void t7000_pcie_log_dbi_gate(struct device *dev,
++				    struct pci_config_window *cfg)
++{
++	dev_info(dev,
++		 "t7000-pcie dbi-ecam-read-test: port %d selector=0x%08x ecam+0x%05x dbi_control=0x%08x\n",
++		 T7000_PCIE_TEST_PORT, T7000_PCIE_DBI_GATE_SELECTOR,
++		 T7000_PCIE_DBI_GATE_ECAM_OFFSET,
++		 readl(cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET));
+ }
+ 
+ static int apple_t7000_pcie_init(struct pci_config_window *cfg)
+@@ -307,6 +329,8 @@
+ 	if (ret)
+ 		return ret;
+ 
++	t7000_pcie_log_dbi_gate(dev, cfg);
++
+ 	dev_info(dev, "t7000-pcie tuning-baseline-test: init complete, handing back to generic ECAM core for bus enumeration\n");
+ 
+ 	return 0;

@@ -1,0 +1,113 @@
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -667,6 +667,15 @@
+ module_param_named(pci_alias, apple_dart_pci_alias, int, 0444);
+ MODULE_PARM_DESC(pci_alias, "J81 test: 1 also map PCI window pages at the raw (un-rebased) DART index");
+ 
++/*
++ * Test only (patch 0081): apple_dart.ios_pte=1 makes the S5L8960X DART use the entry format Apple's iOS 8.1 AppleS5L8960XDART writes: valid bit 1,
++ * directory entries (paddr & 0xfffffff000) | 3, leaf entries (pfn << 12) | 2, no subpage or protection fields. Linux's generic DART1 format sets bit 0 as
++ * the valid bit, so a first-level entry would be invalid for such hardware and the first device DMA would fault (run 26).
++ */
++static int apple_dart_ios_pte;
++module_param_named(ios_pte, apple_dart_ios_pte, int, 0444);
++MODULE_PARM_DESC(ios_pte, "J81 test: 1 write iOS-style S5L8960X DART page-table entries");
++
+ static int apple_dart_map_pages(struct iommu_domain *domain, unsigned long iova,
+ 				phys_addr_t paddr, size_t pgsize,
+ 				size_t pgcount, int prot, gfp_t gfp,
+@@ -767,6 +776,11 @@
+ 		.coherent_walk = 1,
+ 		.iommu_dev = dart->dev,
+ 	};
++
++	if (apple_dart_ios_pte && dart->hw->type == DART_S5L8960X) {
++		pgtbl_cfg.apple_dart_cfg.ios_pte = true;
++		dev_info(dart->dev, "t7000-h1b: iOS-style S5L8960X DART entries (ios_pte)\n");
++	}
+ 
+ 	dart_domain->pgtbl_ops = alloc_io_pgtable_ops(dart->hw->fmt, &pgtbl_cfg,
+ 						      &dart_domain->domain);
+diff --git a/drivers/iommu/io-pgtable-dart.c b/drivers/iommu/io-pgtable-dart.c
+--- a/drivers/iommu/io-pgtable-dart.c
++++ b/drivers/iommu/io-pgtable-dart.c
+@@ -72,6 +72,7 @@
+ 	int			levels;
+ 	int			tbl_bits;
+ 	int			bits_per_level;
++	bool			ios_pte;	/* TEST (patch 0081): iOS S5L8960X entry format */
+ 
+ 	void			*pgd[DART_MAX_TABLES];
+ };
+@@ -118,18 +119,25 @@
+ 	dart_iopte pte = prot;
+ 	size_t sz = data->iop.cfg.pgsize_bitmap;
+ 
++	dart_iopte valid = data->ios_pte ? BIT(1) : APPLE_DART_PTE_VALID;
++
+ 	for (i = 0; i < num_entries; i++)
+-		if (ptep[i] & APPLE_DART_PTE_VALID) {
++		if (ptep[i] & valid) {
+ 			/* We require an unmap first */
+-			WARN_ON(ptep[i] & APPLE_DART_PTE_VALID);
++			WARN_ON(ptep[i] & valid);
+ 			return -EEXIST;
+ 		}
+ 
+-	/* subpage protection: always allow access to the entire page */
+-	pte |= FIELD_PREP(APPLE_DART_PTE_SUBPAGE_START, 0);
+-	pte |= FIELD_PREP(APPLE_DART_PTE_SUBPAGE_END, 0xfff);
++	if (data->ios_pte) {
++		/* iOS AppleS5L8960XDART: entry = (pfn << 12) | 2, no subpage or protection fields */
++		pte = BIT(1);
++	} else {
++		/* subpage protection: always allow access to the entire page */
++		pte |= FIELD_PREP(APPLE_DART_PTE_SUBPAGE_START, 0);
++		pte |= FIELD_PREP(APPLE_DART_PTE_SUBPAGE_END, 0xfff);
+ 
+-	pte |= APPLE_DART_PTE_VALID;
++		pte |= APPLE_DART_PTE_VALID;
++	}
+ 
+ 	for (i = 0; i < num_entries; i++)
+ 		ptep[i] = pte | paddr_to_iopte(paddr + i * sz, data);
+@@ -144,7 +152,8 @@
+ {
+ 	dart_iopte old, new;
+ 
+-	new = paddr_to_iopte(__pa(table), data) | APPLE_DART_PTE_VALID;
++	/* iOS writes directory entries as (paddr & 0xfffffff000) | 3 */
++	new = paddr_to_iopte(__pa(table), data) | (data->ios_pte ? 3 : APPLE_DART_PTE_VALID);
+ 
+ 	/*
+ 	 * Ensure the table itself is visible before its PTE can be.
+@@ -204,6 +213,8 @@
+ {
+ 	dart_iopte pte = 0;
+ 
++	if (data->ios_pte)
++		return 0;
+ 	if (data->iop.fmt == APPLE_DART) {
+ 		pte |= APPLE_DART1_PTE_PROT_SP_DIS;
+ 		if (!(prot & IOMMU_WRITE))
+@@ -392,6 +403,7 @@
+ 	if (!data)
+ 		return NULL;
+ 
++	data->ios_pte = cfg->apple_dart_cfg.ios_pte;
+ 	data->levels = levels + 1; /* Table level counts as one level */
+ 	data->tbl_bits = tbl_bits;
+ 	data->bits_per_level = bits_per_level;
+diff --git a/include/linux/io-pgtable.h b/include/linux/io-pgtable.h
+--- a/include/linux/io-pgtable.h
++++ b/include/linux/io-pgtable.h
+@@ -180,6 +180,8 @@
+ 			u64 ttbr[4];
+ 			u32 n_ttbrs;
+ 			u32 n_levels;
++			/* input (TEST, patch 0081): S5L8960X-style entries, valid bit 1, as Apple's iOS DART driver writes them */
++			bool ios_pte;
+ 		} apple_dart_cfg;
+ 
+ 		struct {

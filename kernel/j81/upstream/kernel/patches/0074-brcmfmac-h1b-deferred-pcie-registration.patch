@@ -1,0 +1,48 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -3501,9 +3501,35 @@
+ };
+ 
+ 
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++/*
++ * Test only (patch 0074): register the PCIe driver brcmfmac.h1b_defer_s seconds after init instead of at init. Once the
++ * firmware runs the Wi-Fi path (macaddr in the NVRAM), the machine resets within a few seconds of the probe, long before
++ * the USB network is up (about 12 s), so the log was never seen. A delay lets the host connect and stream the kernel log first.
++ */
++static unsigned int h1b_defer_s;
++module_param_named(h1b_defer_s, h1b_defer_s, uint, 0444);
++MODULE_PARM_DESC(h1b_defer_s, "J81 test: register the PCIe driver this many seconds after init (0 = immediately)");
++
++static void h1b_deferred_register(struct work_struct *work)
++{
++	pr_info("t7000-h1b: deferred brcmfmac PCIe registration now\n");
++	pci_register_driver(&brcmf_pciedrvr);
++}
++
++static DECLARE_DELAYED_WORK(h1b_defer_work, h1b_deferred_register);
++#endif
++
+ int brcmf_pcie_register(void)
+ {
+ 	brcmf_dbg(PCIE, "Enter\n");
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++	if (h1b_defer_s) {
++		pr_info("t7000-h1b: brcmfmac PCIe registration deferred by %u s (h1b_defer_s)\n", h1b_defer_s);
++		schedule_delayed_work(&h1b_defer_work, h1b_defer_s * HZ);
++		return 0;
++	}
++#endif
+ 	return pci_register_driver(&brcmf_pciedrvr);
+ }
+ 
+@@ -3511,5 +3537,8 @@
+ void brcmf_pcie_exit(void)
+ {
+ 	brcmf_dbg(PCIE, "Enter\n");
++#ifdef CONFIG_BRCMFMAC_PCIE_H1B_DIAG
++	cancel_delayed_work_sync(&h1b_defer_work);
++#endif
+ 	pci_unregister_driver(&brcmf_pciedrvr);
+ }

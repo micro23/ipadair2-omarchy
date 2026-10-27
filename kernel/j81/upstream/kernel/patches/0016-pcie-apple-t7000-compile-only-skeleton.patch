@@ -1,0 +1,183 @@
+diff --git a/drivers/pci/controller/Kconfig b/drivers/pci/controller/Kconfig
+--- a/drivers/pci/controller/Kconfig
++++ b/drivers/pci/controller/Kconfig
+@@ -50,6 +50,23 @@ config PCIE_APPLE
+ 
+ 	  If unsure, say Y if you have an Apple Silicon system.
+ 
++config PCIE_APPLE_T7000
++	tristate "Apple T7000 PCIe compile-only skeleton"
++	depends on ARCH_APPLE || COMPILE_TEST
++	depends on OF
++	help
++	  Build inert groundwork for the older Apple PCIe host controller in
++	  T7000-family SoCs. The current driver only verifies the number of
++	  firmware-described register windows and port interrupts, then refuses
++	  to bind because clock, PHY, MSI, DART and link-training support is not
++	  implemented yet. Its matching T7001 topology is disabled in the device
++	  tree, so the probe is not reached by a normal boot.
++
++	  This driver does not map or access MMIO, request interrupts or GPIOs,
++	  enable power or clocks, start link training, or enumerate a PCI bus.
++
++	  If unsure, say N.
++
+ config PCI_VERSATILE
+ 	bool "ARM Versatile PB PCI controller"
+ 	depends on ARCH_VERSATILE || COMPILE_TEST
+diff --git a/drivers/pci/controller/Makefile b/drivers/pci/controller/Makefile
+--- a/drivers/pci/controller/Makefile
++++ b/drivers/pci/controller/Makefile
+@@ -40,6 +40,7 @@ obj-$(CONFIG_PCIE_BRCMSTB) += pcie-brcmstb.o
+ obj-$(CONFIG_PCI_LOONGSON) += pci-loongson.o
+ obj-$(CONFIG_PCIE_HISI_ERR) += pcie-hisi-error.o
+ obj-$(CONFIG_PCIE_APPLE) += pcie-apple.o
++obj-$(CONFIG_PCIE_APPLE_T7000) += pcie-apple-t7000.o
+ obj-$(CONFIG_PCIE_MT7621) += pcie-mt7621.o
+ obj-$(CONFIG_PCIE_ASPEED) += pcie-aspeed.o
+ 
+diff --git a/drivers/pci/controller/pcie-apple-t7000.c b/drivers/pci/controller/pcie-apple-t7000.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/pci/controller/pcie-apple-t7000.c
+@@ -0,0 +1,74 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Compile-only groundwork for the Apple T7000-family PCIe host controller.
++ *
++ * The real J81 ADT describes four ports, four port interrupts and twelve
++ * register windows. Corellium's older H9P driver confirms the four-port
++ * controller shape, but its register layout, SART and hard-coded PHY sequence
++ * are not valid for T7000. The disabled device tree preserves J81's exact
++ * resource ordering without naming the unresolved small-window roles. Keep
++ * this driver inert until those roles, DART attachment and ADT-provided
++ * tunables have been implemented.
++ */
++
++#include <linux/errno.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/platform_device.h>
++
++#define APPLE_T7000_PCIE_NUM_PORTS	4
++#define APPLE_T7000_PCIE_NUM_REGIONS	12
++
++static int apple_t7000_pcie_validate_firmware(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	int count;
++
++	count = of_address_count(dev->of_node);
++	if (count != APPLE_T7000_PCIE_NUM_REGIONS)
++		return dev_err_probe(dev, -EINVAL,
++				     "expected %d register windows, found %d\n",
++				     APPLE_T7000_PCIE_NUM_REGIONS, count);
++
++	count = platform_irq_count(pdev);
++	if (count < 0)
++		return count;
++	if (count != APPLE_T7000_PCIE_NUM_PORTS)
++		return dev_err_probe(dev, -EINVAL,
++				     "expected %d port interrupts, found %d\n",
++				     APPLE_T7000_PCIE_NUM_PORTS, count);
++
++	return 0;
++}
++
++static int apple_t7000_pcie_probe(struct platform_device *pdev)
++{
++	int ret;
++
++	ret = apple_t7000_pcie_validate_firmware(pdev);
++	if (ret)
++		return ret;
++
++	return dev_err_probe(&pdev->dev, -EOPNOTSUPP,
++			     "link bring-up is not implemented\n");
++}
++
++static const struct of_device_id apple_t7000_pcie_of_match[] = {
++	{ .compatible = "apple,t7000-pcie" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, apple_t7000_pcie_of_match);
++
++static struct platform_driver apple_t7000_pcie_driver = {
++	.probe = apple_t7000_pcie_probe,
++	.driver = {
++		.name = "pcie-apple-t7000",
++		.of_match_table = apple_t7000_pcie_of_match,
++		.suppress_bind_attrs = true,
++	},
++};
++module_platform_driver(apple_t7000_pcie_driver);
++
++MODULE_DESCRIPTION("Compile-only Apple T7000 PCIe host bridge groundwork");
++MODULE_LICENSE("GPL");
+diff --git a/arch/arm64/boot/dts/apple/t7001.dtsi b/arch/arm64/boot/dts/apple/t7001.dtsi
+--- a/arch/arm64/boot/dts/apple/t7001.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001.dtsi
+@@ -265,6 +265,62 @@
+ #endif
+		};
+
++		dart_apcie1: iommu@602002000 {
++			compatible = "apple,t7000-dart", "apple,s5l8960x-dart";
++			reg = <0x6 0x02002000 0x0 0x00200000>;
++			#iommu-cells = <1>;
++			interrupt-parent = <&aic>;
++			interrupts = <AIC_IRQ 216 IRQ_TYPE_LEVEL_HIGH>;
++			status = "disabled";
++		};
++
++		pcie: pcie@610000000 {
++			compatible = "apple,t7000-pcie";
++			device_type = "pci";
++
++			/*
++			 * The J81 ADT proves this ordering and the structural
++			 * port grouping. Keep the small windows unnamed until
++			 * their register-level roles are independently known.
++			 */
++			reg = <0x6 0x10000000 0x0 0x01000000>,
++			      <0x6 0x01004000 0x0 0x00001000>,
++			      <0x6 0x01001000 0x0 0x00001000>,
++			      <0x6 0x02004000 0x0 0x00001000>,
++			      <0x6 0x02001000 0x0 0x00001000>,
++			      <0x6 0x03004000 0x0 0x00001000>,
++			      <0x6 0x03001000 0x0 0x00001000>,
++			      <0x6 0x04004000 0x0 0x00001000>,
++			      <0x6 0x04001000 0x0 0x00001000>,
++			      <0x6 0x00000000 0x0 0x00002000>,
++			      <0x6 0x01005000 0x0 0x00001000>,
++			      <0x6 0x03005000 0x0 0x00001000>;
++
++			interrupt-parent = <&aic>;
++			interrupts = <AIC_IRQ 212 IRQ_TYPE_LEVEL_HIGH>,
++				     <AIC_IRQ 215 IRQ_TYPE_LEVEL_HIGH>,
++				     <AIC_IRQ 218 IRQ_TYPE_LEVEL_HIGH>,
++				     <AIC_IRQ 221 IRQ_TYPE_LEVEL_HIGH>;
++
++			msi-controller;
++			msi-parent = <&pcie>;
++			msi-ranges = <&aic AIC_IRQ 224 IRQ_TYPE_EDGE_RISING 32>;
++
++			iommu-map = <0x100 &dart_apcie1 0 1>;
++			iommu-map-mask = <0xff00>;
++
++			bus-range = <0 4>;
++			#address-cells = <3>;
++			#size-cells = <2>;
++			ranges = <0x43000000 0x6 0x20000000
++				  0x6 0x20000000 0x1 0xa0000000>,
++				 <0x02000000 0x0 0xc0000000
++				  0x7 0xc0000000 0x0 0x40000000>;
++
++			power-domains = <&ps_pcie>;
++			status = "disabled";
++		};
++
+
+		pmgr: power-management@20e000000 {
+			compatible = "apple,t7000-pmgr", "apple,pmgr", "syscon", "simple-mfd";

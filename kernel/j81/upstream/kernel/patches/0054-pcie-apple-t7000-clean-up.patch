@@ -1,0 +1,621 @@
+--- a/drivers/pci/controller/pcie-apple-t7000.c	2026-10-05 10:24:57
++++ b/drivers/pci/controller/pcie-apple-t7000.c	2026-10-05 10:24:57
+@@ -1,77 +1,41 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /*
+- * J81 Wi-Fi REG_ON: assert the BCM4350's `function-reg_on` (D2207 PMU
+- * GPIO 3, register 0x0403) before PCIe setup, then wait 100 ms. This
+- * follows the hardware-proven order from Apple's board configuration.
+- * See t7000_pcie_assert_j81_wifi_reg_on().
++ * Apple T7000-family PCIe host controller, J81 (iPad Air 2) port 1.
+  *
+- * Apple T7000-family PCIe -- enable-sequence + generic-enumeration +
+- * PERST + controller-tuning/DBI-override RMW + enableGated()'s full
+- * recovered tail + bounded link-up poll + recovered maximum-link-speed
+- * RMW (Stage 5F).
++ * Scope: board-specific bring-up of the one populated port (port 1), behind which
++ * J81's BCM4350 Wi-Fi sits. It does not claim support for ports 2-4, MSI, power
++ * management or suspend, hot reset, or an endpoint driver.
+  *
+- * Stage 5F adds the one operation Stage 5E's own review found missing:
+- * J81's ADT `maximum-link-speed = 1` is applied by Apple through a
+- * standard PCIe capability RMW on the root port itself (not a
+- * controller-specific register) -- see
+- * t7000_pcie_set_max_link_speed()'s own comment for the full derivation
+- * and research/t7000-pcie-stage5-handoff.md's "Stage 5F build
+- * instructions" section. Everything else is Stage 5E's already
+- * hardware-verified sequence, unchanged.
++ * Sequence, in Apple's own recovered order (research/t7000-pcie-stage5-handoff.md,
++ * research/t7000-pcie-hardware-findings.md):
++ *  1. Board-gated Wi-Fi REG_ON: D2207 PMU GPIO3 (register 0x0403) is asserted and
++ *     verified, then 100 ms elapse. Declared in the DT with `apple,reg-on-pmic`; a
++ *     declared resource that cannot be asserted fails the probe. REG_ON is left
++ *     asserted across a later probe failure or unbind on purpose: the PMU resets it
++ *     on reboot and deasserting it after a partial host sequence is unproven.
++ *  2. Shared-window port-1 bootstrap (refclk, internal PERST, LTSSM) with its
++ *     10 us and 100 us delays.
++ *  3. Root-port Gen1 limit: PCIe capability walk from the root port's ECAM view,
++ *     Link Control 2 target speed = 2.5 GT/s (Apple's `maximum-link-speed = 1`; the
++ *     BCM4350 is Gen1-only).
++ *  4. DBI gate save/set, the three `dbi-overrides` read-modify-writes, gate restore.
++ *  5. The three `apcie-config-tunables` read-modify-writes.
++ *  6. enableGated()'s tail: port-tail writes +0x114/+0x104/+0x100 and the MSI
++ *     controller registers +0x124/+0x128 (programmed here; no Linux MSI domain exists).
++ *  7. PERST# deassertion, then the link-start write (+0x80 bit 0) last.
++ *  8. Wait for the root port's Data Link Layer Link Active bit, then hand back to the
++ *     generic ECAM core to enumerate. Apple's controller +0x88 bit 6 is not used: its
++ *     meaning is undecoded and it did not track the link on hardware.
+  *
+- * Stage 5D (read-only, superseded here) found that the direct-window
+- * link-up register (+0x88 bit 6) never transitions across a full 1s
+- * window under Stage 5C's write order and content -- strong evidence
+- * that real prerequisite writes were still missing, not just a settle
+- * delay. Decompiling enableGated()'s tail (research/t7000-pcie-stage5-
+- * handoff.md's "Callback decompilation result" section) found: three
+- * direct port-window writes (+0x114=0, +0x104=0xff70afff,
+- * +0x100=0x008f5000), Apple's MSI-controller registers
+- * (+0x124=0x31, +0x128=0x00080008, from FUN_ffffff8002befa14), PERST#
+- * deassertion (FUN_ffffff8002befb10(port, 0)) -- and only THEN the
+- * link-start write (+0x80 |= 1) last. Stages 1-5D had this order
+- * backwards: PERST# deasserted and the link-start write issued *before*
+- * the DBI/tunables/tail/MSI writes. Stage 5E reorders the whole
+- * sequence to match and adds a bounded poll of +0x88 bit 6 (matching
+- * Apple's own waitForLinkUpGated()) instead of a fixed delay.
++ * The values, masks, order and delays of steps 2-7 are recovered, not chosen, and
++ * are pinned by kernel/test_pcie_write_sequence.py; change them only with new
++ * evidence. Reads that look like logging are part of the proven sequence too and
++ * are kept in plain locals so they still happen when debug output is compiled out.
+  *
+- * Explicitly out of scope, per the same research: the opaque
+- * IOPCIDevice vtable call at controller +0x570 (Linux PCI-core
+- * territory, not a controller MMIO operation) and the Apple interrupt
+- * event source cached at port+0x100 (needed for async link-up/down
+- * handling, not for a first bounded-poll experiment).
+- *
+- * Stage 5A read a baseline of the seven offsets Apple's own recovered
+- * `apcie-config-tunables`/`dbi-overrides` records touch, confirming
+- * every offset is live and non-faulting. Stage 5B independently
+- * recovered and hardware-confirmed the DBI write-enable gate's real
+- * address: not a register in the per-port controller window at all, but
+- * an ECAM-relative access through Apple's separate configRead32/
+- * configWrite32 accessor (`cfg->win + 0x88bc` for port 1's gate) -- see
+- * research/t7000-pcie-hardware-findings.md's "Vtable slots 0x5e0/0x5e8
+- * resolved" and "Stage 5B hardware result" sections.
+- *
+- * Stage 5C applies the actual ADT-recovered records, in Apple's own
+- * confirmed order: `dbi-overrides` first (gate set to `saved|1`, three
+- * records applied through the ECAM window, gate restored to `saved`),
+- * then `apcie-config-tunables` through the already-mapped direct
+- * port-controller window. No MSI or firmware work -- out of scope for
+- * this experiment, same as every prior stage.
+- *
+- * Motivation (docs/plans/2026-09-13-j81-wifi-pcie.md's "Next is
+- * research, not a blind retry" section, research/t7000-pcie-hardware-
+- * findings.md's "What the no-endpoint result rules out" section):
+- * Stage 4b v2 confirmed the link-start write genuinely takes and the
+- * whole staged sequence is safe end to end, but no downstream BCM4350
+- * endpoint enumerated -- not after the existing 100ms post-PERST delay,
+- * not after a manual rescan, not after a second rescan ~5s later. A
+- * longer delay is therefore not a credible fix on its own; these
+- * records are Apple's own next step in `enableGated()`, applied before
+- * enumeration.
+- *
+- * Everything else is unchanged from Stage 4b v2 -- see that patch's own
+- * header comment for the mapping-fix history, and `0033`'s for the
+- * enable-sequence evidence trail.
++ * Known limits: the port-1 controller window physically overlaps the DART's MMIO
++ * resource and is mapped non-exclusively on purpose (hardware-proven); there is no
++ * MSI domain; the DLLLA timeout is non-fatal (enumeration is the final authority);
++ * no endpoint driver has run.
+  */
+ 
+ #include <linux/bitops.h>
+@@ -109,22 +73,19 @@
+ #define T7000_PCIE_REG_SHARED			9
+ 
+ /*
+- * Per-port controller window: ADT reg index 2*port+1. Port 1 (the
+- * confirmed populated port) is index 3, physical address 0x602004000 --
+- * see Stage 4a's header comment for the full derivation, and `0038`'s
+- * for the overlap with dart_apcie1's own MMIO region.
++ * Per-port controller window: ADT reg index 2*port+1. Port 1 (the only populated
++ * port) is index 3, physical address 0x602004000. It physically overlaps
++ * dart_apcie1's own MMIO region, so it is mapped non-exclusively (see
++ * apple_t7000_pcie_map_window_shared()).
+  */
+ #define T7000_PCIE_REG_PORT_CONTROLLER(port)	(2 * (port) + 1)
+ #define T7000_PCIE_PORT_CONFIG			0x80
+ #define T7000_PCIE_PORT_CONFIG_LINK_START	BIT(0)
+ 
+ /*
+- * The seven offsets Apple's own recovered apcie-config-tunables/
+- * dbi-overrides records touch in this window, plus the DBI
+- * write-enable gate -- read-only baseline for Stage 5A, not written
+- * here. See the module comment above for the full ADT-recovered
+- * (offset, clear-mask, set-value) triples this baseline is checked
+- * against in a later stage.
++ * The seven offsets Apple's recovered apcie-config-tunables/dbi-overrides records touch
++ * in this window, plus the DBI write-enable gate. They are dumped at debug level before
++ * the writes; the ADT-recovered (offset, clear-mask, set-value) triples are below.
+  */
+ #define T7000_PCIE_TUNE_DBI_A		0x024
+ #define T7000_PCIE_TUNE_DBI_B		0x07c
+@@ -171,14 +132,9 @@
+ };
+ 
+ /*
+- * Apple's waitForLinkUpGated() polls the direct port-controller window
+- * at +0x88 (bit 6 = link up) and +0x8c (bit 0 polled, bit 5 =
+- * error/timeout). Stage 5D read these read-only across a fixed 1s
+- * window and found +0x88 never transitioning under Stage 5C's (wrong)
+- * write order/content. +0x100/+0x104/+0x114 are the three direct writes
+- * Apple's enableGated() tail performs -- their values and the
+- * surrounding callbacks are now decompiled (see the module comment
+- * above) and written for real in Stage 5E, below.
++ * Controller +0x88/+0x8c are state words with undecoded bit meanings. They are logged at
++ * debug level only and never decide anything. +0x100/+0x104/+0x114 are the three direct
++ * port-window writes of Apple's enableGated() tail.
+  */
+ #define T7000_PCIE_LINK_STATUS_A	0x088
+ #define T7000_PCIE_LINK_STATUS_B	0x08c
+@@ -187,7 +143,7 @@
+ #define T7000_PCIE_PORT_TAIL_C		0x114
+ 
+ /*
+- * Stage 5E MSI-controller registers, written by Apple's
++ * MSI-controller registers, written by Apple's
+  * FUN_ffffff8002befa14(port) callback (decompiled 2026-09-25): +0x124
+  * encodes the vector count, +0x128 receives
+  * `msi-vector-base | (msi-vector-base << 16)`. J81's ADT properties are
+@@ -199,19 +155,15 @@
+ #define T7000_PCIE_MSI_VECTOR_BASE	0x128
+ 
+ /*
+- * Stage 5F: J81's `maximum-link-speed = 1` ADT property, applied by
+- * Apple's FUN_ffffff8002bef7c8() -- a standard PCIe capability RMW on
+- * the root port itself, not a controller-specific register. Decompiled
+- * 2026-09-26 (research/t7000-pcie-stage5-handoff.md's "Stage 5F build
+- * instructions" section): locate PCI Express Capability (ID 0x10) via
+- * the standard capability-list walk from the root port's own config
+- * space (ECAM device-1 offset, bus 0/dev 1/func 0, before generic
+- * enumeration has created a real pci_dev for it), require Gen1 in the
+- * Link Capabilities 2 supported-speeds vector, then clear the low
+- * nibble of Link Control 2 and set it to 1 (2.5 GT/s). +0x2c/+0x30
+- * relative to the capability base are the standard PCI_EXP_LNKCAP2/
+- * PCI_EXP_LNKCTL2 offsets -- this is genuinely generic PCIe, reusing no
+- * Apple-specific mechanism.
++ * J81's `maximum-link-speed = 1` ADT property, applied by Apple's
++ * FUN_ffffff8002bef7c8(): a standard PCIe capability read-modify-write on the root port
++ * itself, not a controller-specific register (research/t7000-pcie-stage5-handoff.md).
++ * Locate the PCI Express capability (ID 0x10) with the standard capability-list walk
++ * from the root port's own config space (ECAM device-1 offset, bus 0/dev 1/func 0,
++ * before generic enumeration has created a pci_dev for it), require Gen1 in the
++ * Link Capabilities 2 supported-speeds vector, then clear the low nibble of Link
++ * Control 2 and set it to 1 (2.5 GT/s). +0x2c/+0x30 relative to the capability base
++ * are the standard PCI_EXP_LNKCAP2/PCI_EXP_LNKCTL2 offsets.
+  */
+ #define T7000_PCIE_ROOT_PORT_ECAM_OFFSET	0x8000	/* bus 0, dev 1, func 0 */
+ #define T7000_PCIE_CAP_PTR_OFFSET		0x34	/* standard PCI Capabilities Pointer */
+@@ -224,22 +176,22 @@
+ /* Board port 1 is J81's only populated port; this driver never touches
+  * ports 2-4.
+  */
+-#define T7000_PCIE_TEST_PORT			1
++#define T7000_PCIE_J81_PORT			1
+ 
+-static void t7000_pcie_log_port(struct device *dev, void __iomem *shared,
++static void t7000_pcie_dump_port(struct device *dev, void __iomem *shared,
+ 				 int port, const char *label)
+ {
+ 	u32 off = port * T7000_PCIE_PORT_STRIDE;
+ 	u32 ltssm_off = T7000_PCIE_LTSSM_BASE + port * T7000_PCIE_LTSSM_STRIDE;
++	u32 refclk_en = readl(shared + T7000_PCIE_REFCLK_EN + off);
++	u32 perst_internal = readl(shared + T7000_PCIE_PERST_INTERNAL + off);
++	u32 unknown_10c = readl(shared + T7000_PCIE_UNKNOWN_10C + off);
++	u32 link_enable = readl(shared + T7000_PCIE_LINK_ENABLE + off);
++	u32 ltssm = readl(shared + ltssm_off);
+ 
+-	dev_info(dev,
+-		 "t7000-pcie tuning-baseline-test: %s port %d refclk_en=0x%08x perst_internal=0x%08x unknown_10c=0x%08x link_enable=0x%08x ltssm=0x%08x\n",
+-		 label, port,
+-		 readl(shared + T7000_PCIE_REFCLK_EN + off),
+-		 readl(shared + T7000_PCIE_PERST_INTERNAL + off),
+-		 readl(shared + T7000_PCIE_UNKNOWN_10C + off),
+-		 readl(shared + T7000_PCIE_LINK_ENABLE + off),
+-		 readl(shared + ltssm_off));
++	dev_dbg(dev,
++		"t7000-pcie: %s port %d refclk_en=0x%08x perst_internal=0x%08x unknown_10c=0x%08x link_enable=0x%08x ltssm=0x%08x\n",
++		label, port, refclk_en, perst_internal, unknown_10c, link_enable, ltssm);
+ }
+ 
+ static void t7000_pcie_enable_port_hardware(struct device *dev,
+@@ -333,14 +285,14 @@
+ 
+ 	list_for_each_entry(port, &bridge->ports, list) {
+ 		list_for_each_entry(perst, &port->perst, list) {
+-			dev_info(dev, "t7000-pcie tuning-baseline-test: deasserting PERST#\n");
++			dev_dbg(dev, "t7000-pcie: deasserting PERST#\n");
+ 			gpiod_direction_output(perst->desc, 0);
+ 			count++;
+ 		}
+ 	}
+ 
+ 	if (!count) {
+-		dev_info(dev, "t7000-pcie tuning-baseline-test: no PERST# GPIO found, nothing to deassert\n");
++		dev_warn(dev, "t7000-pcie: no PERST# GPIO found, nothing to deassert\n");
+ 		return;
+ 	}
+ 
+@@ -354,37 +306,36 @@
+ }
+ 
+ /*
+- * Stage 5A: read-only baseline of the seven offsets Apple's own
+- * recovered apcie-config-tunables/dbi-overrides records touch, plus the
+- * DBI write-enable gate. No writes -- see the module comment above.
++ * Debug dump of the seven offsets Apple's recovered apcie-config-tunables/dbi-overrides
++ * records touch, read before any of them is written. The reads are kept in plain locals:
++ * they are part of the proven sequence and must still happen without debug output.
+  */
+-static void t7000_pcie_log_tuning_baseline(struct device *dev,
+-					    void __iomem *ctrl, int port)
++static void t7000_pcie_dump_tuning(struct device *dev, void __iomem *ctrl,
++				    int port)
+ {
+-	dev_info(dev,
+-		 "t7000-pcie tuning-baseline-test: port %d tuning baseline: 0x024=0x%08x 0x07c=0x%08x 0x090=0x%08x 0x0bc=0x%08x 0x130=0x%08x 0x134=0x%08x 0xb44=0x%08x\n",
+-		 port,
+-		 readl(ctrl + T7000_PCIE_TUNE_DBI_A),
+-		 readl(ctrl + T7000_PCIE_TUNE_DBI_B),
+-		 readl(ctrl + T7000_PCIE_TUNE_CONFIG_A),
+-		 readl(ctrl + T7000_PCIE_TUNE_DBI_ENABLE),
+-		 readl(ctrl + T7000_PCIE_TUNE_CONFIG_B),
+-		 readl(ctrl + T7000_PCIE_TUNE_CONFIG_C),
+-		 readl(ctrl + T7000_PCIE_TUNE_DBI_C));
++	u32 dbi_a = readl(ctrl + T7000_PCIE_TUNE_DBI_A);
++	u32 dbi_b = readl(ctrl + T7000_PCIE_TUNE_DBI_B);
++	u32 config_a = readl(ctrl + T7000_PCIE_TUNE_CONFIG_A);
++	u32 dbi_enable = readl(ctrl + T7000_PCIE_TUNE_DBI_ENABLE);
++	u32 config_b = readl(ctrl + T7000_PCIE_TUNE_CONFIG_B);
++	u32 config_c = readl(ctrl + T7000_PCIE_TUNE_CONFIG_C);
++	u32 dbi_c = readl(ctrl + T7000_PCIE_TUNE_DBI_C);
++
++	dev_dbg(dev,
++		"t7000-pcie: port %d tuning registers before writes: 0x024=0x%08x 0x07c=0x%08x 0x090=0x%08x 0x0bc=0x%08x 0x130=0x%08x 0x134=0x%08x 0xb44=0x%08x\n",
++		port, dbi_a, dbi_b, config_a, dbi_enable, config_b, config_c, dbi_c);
+ }
+ 
+ /*
+- * Maps port 1's controller window and logs its at-rest state, but does
+- * NOT write the link-start bit -- Stage 5E moves that write to the very
+- * end of the sequence, after the DBI/tunables/tail/MSI writes and the
+- * GPIO PERST# deassertion, matching Apple's own confirmed order (see
+- * the module comment above). Stages 1-5C wrote it here instead; that
+- * was corrected once the real enableGated() tail was decompiled.
++ * Maps port 1's controller window and dumps its at-rest state. It does not write the
++ * link-start bit: that write comes last in the sequence, after the DBI/tunables/tail/MSI
++ * writes and PERST# deassertion, matching Apple's own confirmed order.
+  */
+ static int t7000_pcie_map_port_window(struct device *dev, int port,
+ 				       void __iomem **ctrl_out)
+ {
+ 	void __iomem *ctrl;
++	u32 at_rest_00, at_rest_80;
+ 	int ret;
+ 
+ 	ret = apple_t7000_pcie_map_window_shared(dev,
+@@ -395,11 +346,13 @@
+ 				     "failed to map port %d controller window\n",
+ 				     port);
+ 
+-	dev_info(dev,
+-		 "t7000-pcie link-wait-test: port %d controller window at rest: 0x00=0x%08x 0x80=0x%08x\n",
+-		 port, readl(ctrl + 0x00), readl(ctrl + T7000_PCIE_PORT_CONFIG));
++	at_rest_00 = readl(ctrl + 0x00);
++	at_rest_80 = readl(ctrl + T7000_PCIE_PORT_CONFIG);
++	dev_dbg(dev,
++		"t7000-pcie: port %d controller window at rest: 0x00=0x%08x 0x80=0x%08x\n",
++		port, at_rest_00, at_rest_80);
+ 
+-	t7000_pcie_log_tuning_baseline(dev, ctrl, port);
++	t7000_pcie_dump_tuning(dev, ctrl, port);
+ 
+ 	*ctrl_out = ctrl;
+ 	return 0;
+@@ -409,24 +362,28 @@
+ 				const char *label, u32 offset, u32 value)
+ {
+ 	u32 old = readl(base + offset);
++	u32 now;
+ 
+ 	writel(value, base + offset);
+-	dev_info(dev,
+-		 "t7000-pcie link-wait-test: %s 0x%05x: 0x%08x -> 0x%08x\n",
+-		 label, offset, old, readl(base + offset));
++	now = readl(base + offset);
++	dev_dbg(dev, "t7000-pcie: %s 0x%05x: 0x%08x -> 0x%08x\n",
++		label, offset, old, now);
+ }
+ 
+ static void t7000_pcie_set_link_start(struct device *dev, void __iomem *ctrl,
+ 				       int port)
+ {
+ 	u32 v = readl(ctrl + T7000_PCIE_PORT_CONFIG);
++	u32 after_00, after_80;
+ 
+ 	writel(v | T7000_PCIE_PORT_CONFIG_LINK_START,
+ 	       ctrl + T7000_PCIE_PORT_CONFIG);
+ 
+-	dev_info(dev,
+-		 "t7000-pcie link-wait-test: port %d controller window after link-start: 0x00=0x%08x 0x80=0x%08x\n",
+-		 port, readl(ctrl + 0x00), readl(ctrl + T7000_PCIE_PORT_CONFIG));
++	after_00 = readl(ctrl + 0x00);
++	after_80 = readl(ctrl + T7000_PCIE_PORT_CONFIG);
++	dev_dbg(dev,
++		"t7000-pcie: port %d controller window after link-start: 0x00=0x%08x 0x80=0x%08x\n",
++		port, after_00, after_80);
+ }
+ 
+ /*
+@@ -474,18 +431,19 @@
+ 	unsigned long deadline;
+ 	u8 cap_ptr;
+ 	u16 lnksta = 0;
++	u32 status_a, status_b;
+ 	bool active = false;
+ 
+ 	cap_ptr = t7000_pcie_find_express_cap(dev1);
+ 	if (!cap_ptr) {
+-		dev_info(dev,
+-			 "t7000-pcie link-wait: PCI Express capability not found, relying on enumeration\n");
++		dev_warn(dev,
++			 "t7000-pcie: PCI Express capability not found, relying on enumeration\n");
+ 		return;
+ 	}
+ 
+ 	if (!(readl(dev1 + cap_ptr + T7000_PCIE_LNKCAP_OFFSET) & T7000_PCIE_LNKCAP_DLLLARC)) {
+-		dev_info(dev,
+-			 "t7000-pcie link-wait: root port does not report link-active, relying on enumeration\n");
++		dev_warn(dev,
++			 "t7000-pcie: root port does not report link-active, relying on enumeration\n");
+ 		return;
+ 	}
+ 
+@@ -498,13 +456,15 @@
+ 		msleep(T7000_PCIE_LINK_ACTIVE_POLL_MS);
+ 	} while (time_before(jiffies, deadline));
+ 
+-	dev_info(dev,
+-		 "t7000-pcie link-wait: link active=%d lnksta=0x%04x (controller +0x088=0x%08x +0x08c=0x%08x, undecoded)\n",
+-		 active, lnksta, readl(ctrl + T7000_PCIE_LINK_STATUS_A),
+-		 readl(ctrl + T7000_PCIE_LINK_STATUS_B));
++	status_a = readl(ctrl + T7000_PCIE_LINK_STATUS_A);
++	status_b = readl(ctrl + T7000_PCIE_LINK_STATUS_B);
++	dev_info(dev, "t7000-pcie: link active=%d lnksta=0x%04x\n", active, lnksta);
++	dev_dbg(dev,
++		"t7000-pcie: controller +0x088=0x%08x +0x08c=0x%08x (undecoded, not a link indicator)\n",
++		status_a, status_b);
+ 	if (!active)
+ 		dev_warn(dev,
+-			 "t7000-pcie link-wait: link did not become active within %d ms; enumeration will likely find no device\n",
++			 "t7000-pcie: link did not become active within %d ms; enumeration will likely find no device\n",
+ 			 T7000_PCIE_LINK_ACTIVE_TIMEOUT_MS);
+ }
+ 
+@@ -513,33 +473,27 @@
+ 			    u32 set_value)
+ {
+ 	u32 old = readl(base + offset);
++	u32 now;
+ 
+ 	writel((old & ~clear_mask) | set_value, base + offset);
+-	dev_info(dev,
+-		 "t7000-pcie dbi-write-test: %s 0x%05x: 0x%08x -> 0x%08x\n",
+-		 label, offset, old, readl(base + offset));
++	now = readl(base + offset);
++	dev_dbg(dev, "t7000-pcie: %s 0x%05x: 0x%08x -> 0x%08x\n",
++		label, offset, old, now);
+ }
+ 
+ /*
+- * Stage 5C: the actual gated RMW, following Apple's own confirmed order
+- * (research/t7000-pcie-hardware-findings.md's "Real PCIe host-controller
+- * driver, Stage 4b" section onward): dbi-overrides first, gated by
+- * saving the DBI control register, setting its low bit, applying the
+- * three records, then restoring the saved value -- then
+- * apcie-config-tunables through the direct port-controller window. No
+- * MSI or firmware work -- out of scope for this experiment, same as
+- * every prior stage.
++ * Apple's confirmed order: dbi-overrides first, gated by saving the DBI control register,
++ * setting its low bit, applying the three records, then restoring the saved value; then
++ * apcie-config-tunables through the direct port-controller window.
+  */
+ static void t7000_pcie_apply_dbi_overrides(struct device *dev,
+ 					    struct pci_config_window *cfg)
+ {
+-	u32 saved;
++	u32 saved, restored;
+ 	int i;
+ 
+ 	saved = readl(cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET);
+-	dev_info(dev,
+-		 "t7000-pcie dbi-write-test: dbi gate saved=0x%08x, setting saved|1\n",
+-		 saved);
++	dev_dbg(dev, "t7000-pcie: dbi gate saved=0x%08x, setting saved|1\n", saved);
+ 	writel(saved | 1, cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET);
+ 
+ 	for (i = 0; i < 3; i++)
+@@ -549,9 +503,9 @@
+ 			       t7000_pcie_dbi_overrides[i].set_value);
+ 
+ 	writel(saved, cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET);
+-	dev_info(dev,
+-		 "t7000-pcie dbi-write-test: dbi gate restored to 0x%08x (readback 0x%08x)\n",
+-		 saved, readl(cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET));
++	restored = readl(cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET);
++	dev_dbg(dev, "t7000-pcie: dbi gate restored to 0x%08x (readback 0x%08x)\n",
++		saved, restored);
+ }
+ 
+ static void t7000_pcie_apply_config_tunables(struct device *dev,
+@@ -567,27 +521,24 @@
+ }
+ 
+ /*
+- * Stage 5B mapping gate: read the DBI write-enable control through the
+- * already-mapped generic ECAM window. Apple builds this address with its
+- * configRead32 accessor. This is intentionally read only: the saved|1
+- * write, DBI RMWs, and restore remain deferred until observed on J81.
++ * Debug dump of the DBI write-enable control, read through the already-mapped generic
++ * ECAM window (Apple builds this address with its configRead32 accessor). Read only.
+  */
+-static void t7000_pcie_log_dbi_gate(struct device *dev,
+-				    struct pci_config_window *cfg)
++static void t7000_pcie_dump_dbi_gate(struct device *dev,
++				      struct pci_config_window *cfg)
+ {
+-	dev_info(dev,
+-		 "t7000-pcie dbi-ecam-read-test: port %d selector=0x%08x ecam+0x%05x dbi_control=0x%08x\n",
+-		 T7000_PCIE_TEST_PORT, T7000_PCIE_DBI_GATE_SELECTOR,
+-		 T7000_PCIE_DBI_GATE_ECAM_OFFSET,
+-		 readl(cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET));
++	u32 dbi_control = readl(cfg->win + T7000_PCIE_DBI_GATE_ECAM_OFFSET);
++
++	dev_dbg(dev,
++		"t7000-pcie: port %d dbi gate selector=0x%08x ecam+0x%05x dbi_control=0x%08x\n",
++		T7000_PCIE_J81_PORT, T7000_PCIE_DBI_GATE_SELECTOR,
++		T7000_PCIE_DBI_GATE_ECAM_OFFSET, dbi_control);
+ }
+ 
+ /*
+- * Stage 5F: bounded, generic PCIe capability RMW -- see the macro block
+- * above for the full derivation. Skips the write (leaving Stage 5E's
+- * behavior intact) if the capability list, the Gen1 support bit, or the
+- * capability ID readback at the found offset don't match the expected
+- * shape; never guesses an offset or retries.
++ * Bounded, generic PCIe capability read-modify-write (see the macro block above for
++ * the derivation). It skips the write if the capability list or the Gen1 support bit
++ * does not have the expected shape; it never guesses an offset or retries.
+  */
+ static void t7000_pcie_set_max_link_speed(struct device *dev,
+ 					   struct pci_config_window *cfg)
+@@ -595,19 +546,19 @@
+ 	void __iomem *dev1 = cfg->win + T7000_PCIE_ROOT_PORT_ECAM_OFFSET;
+ 	u8 cap_ptr;
+ 	u32 lnkcap2;
+-	u16 old, new;
++	u16 old, new, readback;
+ 
+ 	cap_ptr = t7000_pcie_find_express_cap(dev1);
+ 	if (!cap_ptr) {
+-		dev_info(dev,
+-			 "t7000-pcie link-speed-test: PCI Express capability not found, skipping max-link-speed write\n");
++		dev_warn(dev,
++			 "t7000-pcie: PCI Express capability not found, Gen1 limit not applied\n");
+ 		return;
+ 	}
+ 
+ 	lnkcap2 = readl(dev1 + cap_ptr + T7000_PCIE_LNKCAP2_OFFSET);
+ 	if (!(lnkcap2 & T7000_PCIE_LNKCAP2_GEN1_SUPPORTED)) {
+-		dev_info(dev,
+-			 "t7000-pcie link-speed-test: Gen1 not in supported-speeds vector (lnkcap2=0x%08x), skipping\n",
++		dev_warn(dev,
++			 "t7000-pcie: Gen1 not in supported-speeds vector (lnkcap2=0x%08x), Gen1 limit not applied\n",
+ 			 lnkcap2);
+ 		return;
+ 	}
+@@ -615,10 +566,10 @@
+ 	old = readw(dev1 + cap_ptr + T7000_PCIE_LNKCTL2_OFFSET);
+ 	new = (old & 0xfff0) | 1;
+ 	writew(new, dev1 + cap_ptr + T7000_PCIE_LNKCTL2_OFFSET);
+-	dev_info(dev,
+-		 "t7000-pcie link-speed-test: cap@0x%02x lnkctl2 0x%04x -> 0x%04x (readback 0x%04x)\n",
+-		 cap_ptr, old, new,
+-		 readw(dev1 + cap_ptr + T7000_PCIE_LNKCTL2_OFFSET));
++	readback = readw(dev1 + cap_ptr + T7000_PCIE_LNKCTL2_OFFSET);
++	dev_dbg(dev,
++		"t7000-pcie: Gen1 limit: cap@0x%02x lnkctl2 0x%04x -> 0x%04x (readback 0x%04x)\n",
++		cap_ptr, old, new, readback);
+ }
+ 
+ static int apple_t7000_pcie_init(struct pci_config_window *cfg)
+@@ -629,41 +580,39 @@
+ 	void __iomem *ctrl;
+ 	int ret;
+ 
+-	dev_info(dev, "t7000-pcie tuning-baseline-test: init entry\n");
++	dev_dbg(dev, "t7000-pcie: init entry\n");
+ 
+ 	ret = apple_t7000_pcie_map_window(dev, T7000_PCIE_REG_SHARED, &shared);
+ 	if (ret)
+ 		return ret;
+ 
+-	t7000_pcie_log_port(dev, shared, T7000_PCIE_TEST_PORT, "before");
++	t7000_pcie_dump_port(dev, shared, T7000_PCIE_J81_PORT, "before");
+ 
+-	dev_info(dev, "t7000-pcie tuning-baseline-test: about to write the recovered enable sequence for port %d\n",
+-		 T7000_PCIE_TEST_PORT);
+-	t7000_pcie_enable_port_hardware(dev, shared, T7000_PCIE_TEST_PORT);
+-	dev_info(dev, "t7000-pcie tuning-baseline-test: enable sequence write completed\n");
++	dev_dbg(dev, "t7000-pcie: writing the recovered enable sequence for port %d\n",
++		T7000_PCIE_J81_PORT);
++	t7000_pcie_enable_port_hardware(dev, shared, T7000_PCIE_J81_PORT);
++	dev_dbg(dev, "t7000-pcie: enable sequence written\n");
+ 
+-	t7000_pcie_log_port(dev, shared, T7000_PCIE_TEST_PORT, "after");
++	t7000_pcie_dump_port(dev, shared, T7000_PCIE_J81_PORT, "after");
+ 
+-	ret = t7000_pcie_map_port_window(dev, T7000_PCIE_TEST_PORT, &ctrl);
++	ret = t7000_pcie_map_port_window(dev, T7000_PCIE_J81_PORT, &ctrl);
+ 	if (ret)
+ 		return ret;
+ 
+ 	t7000_pcie_set_max_link_speed(dev, cfg);
+ 
+-	t7000_pcie_log_dbi_gate(dev, cfg);
++	t7000_pcie_dump_dbi_gate(dev, cfg);
+ 
+ 	t7000_pcie_apply_dbi_overrides(dev, cfg);
+ 	t7000_pcie_apply_config_tunables(dev, ctrl);
+ 
+ 	/*
+-	 * enableGated()'s tail, in Apple's own confirmed order: the three
+-	 * direct port-window writes, then the MSI-controller registers
+-	 * (FUN_ffffff8002befa14's real effect), then PERST# deassertion
+-	 * (FUN_ffffff8002befb10(port, 0)), then the link-start write last.
+-	 * The opaque IOPCIDevice vtable call at controller +0x570 and the
+-	 * interrupt event source at port+0x100 are Linux PCI-core/IRQ
+-	 * territory, not controller MMIO -- explicitly out of scope here,
+-	 * per research/t7000-pcie-stage5-handoff.md's Stage 5E design.
++	 * enableGated()'s tail, in Apple's own confirmed order: the three direct port-window
++	 * writes, then the MSI-controller registers (FUN_ffffff8002befa14's real effect), then
++	 * PERST# deassertion (FUN_ffffff8002befb10(port, 0)), then the link-start write last.
++	 * The opaque IOPCIDevice vtable call at controller +0x570 and the interrupt event
++	 * source at port+0x100 are Linux PCI-core/IRQ territory, not controller MMIO, and are
++	 * out of scope here (research/t7000-pcie-stage5-handoff.md).
+ 	 */
+ 	t7000_pcie_write32(dev, ctrl, "port-tail", T7000_PCIE_PORT_TAIL_C, 0x00000000);
+ 	t7000_pcie_write32(dev, ctrl, "port-tail", T7000_PCIE_PORT_TAIL_B, 0xff70afff);
+@@ -673,11 +622,11 @@
+ 
+ 	t7000_pcie_deassert_perst(dev, bridge);
+ 
+-	t7000_pcie_set_link_start(dev, ctrl, T7000_PCIE_TEST_PORT);
++	t7000_pcie_set_link_start(dev, ctrl, T7000_PCIE_J81_PORT);
+ 
+ 	t7000_pcie_wait_link_active(dev, cfg, ctrl);
+ 
+-	dev_info(dev, "t7000-pcie link-wait: init complete, handing back to generic ECAM core for bus enumeration\n");
++	dev_dbg(dev, "t7000-pcie: init complete, handing back to the generic ECAM core\n");
+ 
+ 	return 0;
+ }
+@@ -775,7 +724,7 @@
+ 	struct pci_host_bridge *bridge;
+ 	int ret;
+ 
+-	dev_info(&pdev->dev, "t7000-pcie tuning-baseline-test: probe entry\n");
++	dev_dbg(&pdev->dev, "t7000-pcie: probe entry\n");
+ 
+ 	ret = t7000_pcie_assert_j81_wifi_reg_on(&pdev->dev);
+ 	if (ret)

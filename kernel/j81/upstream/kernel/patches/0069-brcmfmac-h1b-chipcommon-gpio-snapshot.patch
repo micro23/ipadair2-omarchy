@@ -1,0 +1,60 @@
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+@@ -1045,6 +1045,32 @@
+ 		dev_info(&devinfo->pdev->dev, H1B_PREFIX "isr #%u irq %d mailbox status 0x%x\n", n, irq, status);
+ }
+ 
++/*
++ * Read-only snapshot of the ChipCommon GPIO registers (gpiopullup 0x58, gpiopulldown 0x5c, gpioin 0x60, gpioout 0x64,
++ * gpioouten 0x68, gpiocontrol 0x6c) and the two registers Apple's driver writes next to them (0xc40, 0xe00). Apple
++ * makes chip GPIO 0 an output and drives it; this shows what the chip has while Linux does not. The BAR0 window is
++ * moved to ChipCommon for the reads and put back on PCIe2 afterwards, with the interrupt held off meanwhile.
++ */
++static void h1b_log_chipcommon_gpio(struct brcmf_pciedev_info *devinfo, const char *when)
++{
++	static const u16 offs[] = { 0x58, 0x5c, 0x60, 0x64, 0x68, 0x6c, 0xc40, 0xe00 };
++	u32 v[ARRAY_SIZE(offs)];
++	int i;
++
++	if (!devinfo->ci)
++		return;
++	if (devinfo->irq_allocated)
++		disable_irq(devinfo->pdev->irq);
++	brcmf_pcie_select_core(devinfo, BCMA_CORE_CHIPCOMMON);
++	for (i = 0; i < ARRAY_SIZE(offs); i++)
++		v[i] = brcmf_pcie_read_reg32(devinfo, offs[i]);
++	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
++	if (devinfo->irq_allocated)
++		enable_irq(devinfo->pdev->irq);
++	dev_info(&devinfo->pdev->dev, H1B_PREFIX "chipcommon gpio (%s): pullup 0x%08x pulldown 0x%08x in 0x%08x out 0x%08x "
++		 "outen 0x%08x control 0x%08x reg 0xc40 0x%08x reg 0xe00 0x%08x\n", when, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]);
++}
++
+ /* Ring state as host and device see it, plus the control rings' first items (protocol headers). */
+ static void h1b_dump_rings(struct brcmf_pciedev_info *devinfo, const char *why)
+ {
+@@ -1055,6 +1081,7 @@
+ 		 atomic_read(&h1b_isr_count), brcmf_pcie_read_reg32(devinfo, devinfo->reginfo->mailboxint));
+ 	h1b_log_domain(devinfo);
+ 	h1b_log_msi(devinfo, "at snapshot");
++	h1b_log_chipcommon_gpio(devinfo, "at snapshot");
+ 	{
+ 		u32 sbmbx = 0;
+ 
+@@ -1135,6 +1162,7 @@
+ static inline void h1b_log_msi(struct brcmf_pciedev_info *devinfo, const char *when) { }
+ static inline void h1b_isr_note(struct brcmf_pciedev_info *devinfo, int irq, u32 status) { }
+ static inline void h1b_dump_rings(struct brcmf_pciedev_info *devinfo, const char *why) { }
++static inline void h1b_log_chipcommon_gpio(struct brcmf_pciedev_info *devinfo, const char *when) { }
+ static inline void h1b_console_poll_start(struct brcmf_pciedev_info *devinfo) { }
+ static inline void h1b_console_poll_stop(void) { }
+ #endif
+@@ -1187,6 +1215,7 @@
+ 	}
+ 	devinfo->irq_allocated = true;
+ 	h1b_log_msi(devinfo, "after request_irq");
++	h1b_log_chipcommon_gpio(devinfo, "after request_irq");
+ 	h1b_console_poll_start(devinfo);
+ 	return 0;
+ }
