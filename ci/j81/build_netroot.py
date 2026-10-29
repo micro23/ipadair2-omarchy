@@ -158,8 +158,7 @@ def main():
                   for name in ("Image", "Image.gz", "t7001-j81.dtb", "kernel.config")},
         "note": "NOT bootable alone. J81 private firmware, USB ECM/NFS initramfs, and systemd adaptation remain.",
     }
-    (products / "netroot-manifest.json").write_text(json.dumps(manifest, indent=2) + "
-")
+    (products / "netroot-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print("Built and checked J81 network-root kernel:", products)
     print("Not a boot payload. Do not replace the working wifi-base files.")
 
