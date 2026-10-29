@@ -1,0 +1,39 @@
+From d80eb70525d521bf4d47cb97e4b489458667795a Mon Sep 17 00:00:00 2001
+From: Micro <micro@Micros-MacBook-Air.local>
+Date: Thu, 29 Oct 2026 10:44:59 -0400
+Subject: [PATCH] Pass explicit device profiles in resolve tests
+
+---
+ tests/test_package_boundaries.py | 2 +-
+ tests/test_runtime.py            | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/tests/test_package_boundaries.py b/tests/test_package_boundaries.py
+index c7caee5..323d66d 100644
+--- a/tests/test_package_boundaries.py
++++ b/tests/test_package_boundaries.py
+@@ -40,7 +40,7 @@ from orchard_cli.apple import adt_tree, adt_capture, macho, osserialize, ipsw, u
+ from orchard_hardware.apple import adt
+ from orchard_cli.command import main
+ sys.argv=['orchard','distros'];main()
+-sys.argv=['orchard','resolve',MANIFEST];main()
++sys.argv=['orchard','resolve',MANIFEST,'--profile','j71b'];main()
+ '''.replace('MANIFEST', repr(str(FIXTURE.resolve())))
+         with tempfile.TemporaryDirectory() as store:
+             result = subprocess.run([sys.executable, '-I', '-c', script], cwd=store,
+diff --git a/tests/test_runtime.py b/tests/test_runtime.py
+index 91aae7d..9d1dd5d 100644
+--- a/tests/test_runtime.py
++++ b/tests/test_runtime.py
+@@ -278,7 +278,7 @@ def guard(event, args):
+ 
+ sys.addaudithook(guard)
+ from orchard_cli.command import main
+-sys.argv = ['orchard', 'resolve', INPUT]
++sys.argv = ['orchard', 'resolve', INPUT, '--profile', 'j71b']
+ main()
+ '''.replace('BLOCKED', repr([str(path) for path in blocked])).replace('INPUT', repr(str(inputs / 'index.toml')))
+         env = {**os.environ, 'ORCHARD_HOME': str(self.root / 'isolated-store'), 'PYTHONDONTWRITEBYTECODE': '1'}
+-- 
+2.54.0 (Apple Git-157)
+

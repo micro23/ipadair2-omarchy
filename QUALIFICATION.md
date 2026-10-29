@@ -1,5 +1,17 @@
 # Qualification record
 
+## Latest additions — 2026-10-29
+
+Later direct Work-mode tests qualified the refactored Orchard J81 baseline
+and a separate read-only ANS1 experiment. The paired source-built Pongo
+comparison failed with both quiet and normal framebuffer output; its cause
+is unresolved. See [current scope](docs/status/2026-10-29.md),
+[paired Pongo results](docs/pongo/COMPARISON.md), and
+[ANS1 evidence](experimental/j81-storage/README.md). The experimental writable
+path and internal-root PID 1 boot remain unqualified.
+
+## Historical 2026-10-27 RAM/desktop session
+
 Scope: one owner-operated **iPad5,3 / J81AP**, initially on iPadOS 15.8.3,
 booted from an Apple Silicon Mac. The following is a summary of the owner's
 reported physical results; the build environment did not directly access the

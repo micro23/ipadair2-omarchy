@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-29",
+  "pongo": {
+    "source_flag_pair_rebuilt": true,
+    "quiet_repeat_identical": true,
+    "published_rebuild_helper_retested": true,
+    "quiet_and_normal_hardware_rounds": 2,
+    "linux_or_storage_commands_in_pair": false
+  },
+  "new_storage_host_unittests": 26,
+  "compiled_range_assertions": 16,
+  "range_sanitizers": [
+    "address",
+    "undefined-behavior"
+  ],
+  "historical_fullroot_offline_script_cases": 14,
+  "historical_systemd_stage_static_syntax_and_fake_checks": 39,
+  "original_userspace_archive_hash_reverified": true,
+  "original_rootfs_modified": false,
+  "new_kernel_live_write_test": false,
+  "internal_install": false,
+  "security_audit": "See privacy-audit-2026-10-29.json; exact-owner-value matching performed locally before publication"
+}

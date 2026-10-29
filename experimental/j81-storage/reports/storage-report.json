@@ -1,0 +1,83 @@
+{
+  "kernel_verified": true,
+  "namespaces": [
+    {
+      "name": "asp0n1",
+      "ro": 1,
+      "sectors_512": 125000000,
+      "bytes": 64000000000,
+      "logical_block_size": 4096
+    },
+    {
+      "name": "asp0n10",
+      "ro": 1,
+      "sectors_512": 2048,
+      "bytes": 1048576,
+      "logical_block_size": 4096
+    },
+    {
+      "name": "asp0n2",
+      "ro": 1,
+      "sectors_512": 2032,
+      "bytes": 1040384,
+      "logical_block_size": 4096
+    },
+    {
+      "name": "asp0n3",
+      "ro": 1,
+      "sectors_512": 8192,
+      "bytes": 4194304,
+      "logical_block_size": 4096
+    },
+    {
+      "name": "asp0n4",
+      "ro": 1,
+      "sectors_512": 16,
+      "bytes": 8192,
+      "logical_block_size": 4096
+    },
+    {
+      "name": "asp0n5",
+      "ro": 1,
+      "sectors_512": 256,
+      "bytes": 131072,
+      "logical_block_size": 4096
+    },
+    {
+      "name": "asp0n6",
+      "ro": 1,
+      "sectors_512": 256,
+      "bytes": 131072,
+      "logical_block_size": 4096
+    },
+    {
+      "name": "asp0n7",
+      "ro": 1,
+      "sectors_512": 256,
+      "bytes": 131072,
+      "logical_block_size": 4096
+    },
+    {
+      "name": "asp0n8",
+      "ro": 1,
+      "sectors_512": 256,
+      "bytes": 131072,
+      "logical_block_size": 4096
+    },
+    {
+      "name": "asp0n9",
+      "ro": 1,
+      "sectors_512": 2048,
+      "bytes": 1048576,
+      "logical_block_size": 4096
+    }
+  ],
+  "read_attempted": true,
+  "bytes_read": 4096,
+  "storage_write_commands": false,
+  "userarea_bytes": 64000000000,
+  "protective_mbr_signature": true,
+  "apfs_container_signature_at_32": false,
+  "gpt_signature_at_512": false,
+  "partition_metadata_captured": true
+}

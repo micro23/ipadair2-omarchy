@@ -1,0 +1,10 @@
+[Unit]
+Description=Verify J81 native internal Omarchy root
+After=local-fs.target systemd-udev-trigger.service
+Before=getty@tty1.service seatd.service
+OnFailure=emergency.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/j81-internal-root-guard
+RemainAfterExit=yes

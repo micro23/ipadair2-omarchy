@@ -1,0 +1,22 @@
+{
+  "release": "7.3.0-rc1-orchard-j81-storage-ro-v2mod",
+  "ans1_is_module": true,
+  "automatic_ans1_probe": false,
+  "storage_writes_allowed": false,
+  "hardware_tested": true,
+  "files": {
+    "Image.gz": "42729e7d9d5d57e26e438114982d83aa5cc7ed7d3c1149b1a6e1e554d31e5a3e",
+    "j81.dtb": "9c21681e8516496fc33c8fff5127bd11f94ceef330f34eb5f4eaf203fbbc101c",
+    "linux.bin": "1e98e353b6ed9dcd585eff52fba865a9aed17a9a20b1878bcfaf38ec9ec6eac1"
+  },
+  "qualification_scope": {
+    "cold_boot_into_diagnostic": true,
+    "manual_ans1_probe": true,
+    "all_ten_namespaces_readonly": true,
+    "bounded_userarea_read_4096_bytes": true,
+    "gpt_metadata_crc_valid": true,
+    "filesystem_mount": false,
+    "storage_writes": false,
+    "internal_root_boot": false
+  }
+}

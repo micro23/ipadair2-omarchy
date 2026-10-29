@@ -1,0 +1,2572 @@
+diff --git a/Documentation/devicetree/bindings/block/apple,s5l8960x-ans.yaml b/Documentation/devicetree/bindings/block/apple,s5l8960x-ans.yaml
+new file mode 100644
+index 000000000..4fb0acf40
+--- /dev/null
++++ b/Documentation/devicetree/bindings/block/apple,s5l8960x-ans.yaml
+@@ -0,0 +1,64 @@
++# SPDX-License-Identifier: GPL-2.0 OR BSD-2-Clause
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/block/apple,s5l8960x-ans.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Apple ANS1 storage controller
++
++maintainers:
++  - Nick Chan <towinchenmi@gmail.com>
++
++properties:
++  compatible:
++    oneOf:
++      - const: apple,s5l8960x-ans
++      - items:
++          - enum:
++              - apple,t7000-ans
++              - apple,t7001-ans
++          - const: apple,s5l8960x-ans
++
++  reg:
++    maxItems: 1
++    description: AKF co-processor control registers
++
++  power-domains:
++    maxItems: 1
++    description: ANS1 CPU and mailbox power domain
++
++  mboxes:
++    maxItems: 1
++    description: Mailbox of the ANS1 co-processor
++
++  resets:
++    maxItems: 1
++
++  memory-region:
++    maxItems: 1
++    description: Region containing ANS1 firmware
++
++  memory-region-names:
++    const: firmware
++
++required:
++  - compatible
++  - reg
++  - power-domains
++  - mboxes
++  - resets
++
++additionalProperties: false
++
++examples:
++  - |
++    #include <dt-bindings/interrupt-controller/apple-aic.h>
++    #include <dt-bindings/interrupt-controller/irq.h>
++
++    block@8040000 {
++      compatible = "apple,t7000-ans", "apple,s5l8960x-ans";
++      reg = <0x8040000 0x40000>;
++      mboxes = <&ans_mbox>;
++      power-domains = <&ps_ans>;
++      resets = <&ps_ans>;
++    };
+diff --git a/Documentation/devicetree/bindings/mailbox/apple,mailbox.yaml b/Documentation/devicetree/bindings/mailbox/apple,mailbox.yaml
+index 28985cc62..300a63680 100644
+--- a/Documentation/devicetree/bindings/mailbox/apple,mailbox.yaml
++++ b/Documentation/devicetree/bindings/mailbox/apple,mailbox.yaml
+@@ -35,9 +35,10 @@ properties:
+           - const: apple,asc-mailbox-v4
+ 
+       - description:
+-          An older ASC mailbox interface found on T2 and A11 that is also
+-          used for the NVMe coprocessor and the system management
+-          controller.
++          The oldest ASC mailbox interface as well as a 96-bit variant
++          of the AKF mailbox with similar behaviours are found on T2 and
++          A11 and is used for the NVMe coprocessor and system management
++          coprocessor.
+         items:
+           - const: apple,t8015-asc-mailbox
+ 
+@@ -52,6 +53,16 @@ properties:
+               - apple,t6000-m3-mailbox
+           - const: apple,m3-mailbox-v2
+ 
++      - description:
++          AKF mailboxes with 64-bit messages are found on A7 - A10 SoCs
++          connecting to Cortex-A7 coprocessors such as the storage
++          controller and power management processor.
++        items:
++          - enum:
++              - apple,t7000-akf-mailbox-v1
++              - apple,s5l8960x-akf-mailbox-v1
++          - const: apple,akf-mailbox-v1
++
+   reg:
+     maxItems: 1
+ 
+diff --git a/arch/arm64/boot/dts/apple/s5l8960x-common.dtsi b/arch/arm64/boot/dts/apple/s5l8960x-common.dtsi
+index a819f93cd..00fec1546 100644
+--- a/arch/arm64/boot/dts/apple/s5l8960x-common.dtsi
++++ b/arch/arm64/boot/dts/apple/s5l8960x-common.dtsi
+@@ -12,6 +12,7 @@
+ / {
+ 	aliases {
+ 		ausbphy0 = &ausbphy0; /* Used by loader */
++		asp = &ans;
+ 		serial0 = &serial0;
+ 	};
+ 
+@@ -40,10 +41,21 @@ reserved-memory {
+ 		#size-cells = <2>;
+ 		ranges;
+ 
++		ans_firmware: ans-firmware {
++			/* Filled in by bootloder */
++			reg = <0 0 0 0>;
++			no-map;
++		};
+ 		/* To be filled by loader */
+ 	};
+ };
+ 
++&ans {
++	memory-region = <&ans_firmware>;
++	memory-region-names = "firmware";
++	status = "okay";
++};
++
+ &serial0 {
+ 	status = "okay";
+ };
+diff --git a/arch/arm64/boot/dts/apple/s5l8960x-pmgr.dtsi b/arch/arm64/boot/dts/apple/s5l8960x-pmgr.dtsi
+index da265f484..0942c2b75 100644
+--- a/arch/arm64/boot/dts/apple/s5l8960x-pmgr.dtsi
++++ b/arch/arm64/boot/dts/apple/s5l8960x-pmgr.dtsi
+@@ -579,6 +579,7 @@ ps_ans: power-controller@20200 {
+ 		#power-domain-cells = <0>;
+ 		#reset-cells = <0>;
+ 		label = "ans";
++		apple,always-on;
+ 	};
+ 
+ 	ps_ans_dll: power-controller@20208 {
+diff --git a/arch/arm64/boot/dts/apple/s5l8960x.dtsi b/arch/arm64/boot/dts/apple/s5l8960x.dtsi
+index 2a747bec0..24db3b171 100644
+--- a/arch/arm64/boot/dts/apple/s5l8960x.dtsi
++++ b/arch/arm64/boot/dts/apple/s5l8960x.dtsi
+@@ -77,6 +77,29 @@ cpufreq: performance-controller@202220000 {
+ 			#performance-domain-cells = <0>;
+ 		};
+ 
++		ans: block@208040000 {
++			compatible = "apple,s5l8960x-ans";
++			reg = <0x2 0x08040000 0x0 0x1000>;
++			mboxes = <&ans_mbox>;
++			power-domains = <&ps_ans>;/*?*/
++			resets = <&ps_ans>;
++			status = "disabled";
++		};
++
++		ans_mbox: mbox@208041000 {
++			compatible = "apple,t7000-akf-mailbox-v1", "apple,akf-mailbox-v1";
++			reg = <0x2 0x08041000 0x0 0x1000>;
++			interrupt-parent = <&aic>;
++			interrupts = <AIC_IRQ 52 IRQ_TYPE_LEVEL_HIGH>,
++				<AIC_IRQ 53 IRQ_TYPE_LEVEL_HIGH>,
++				<AIC_IRQ 54 IRQ_TYPE_LEVEL_HIGH>,
++				<AIC_IRQ 55 IRQ_TYPE_LEVEL_HIGH>;
++			interrupt-names = "send-empty", "send-not-empty",
++				"recv-empty", "recv-not-empty";
++			#mbox-cells = <0>;
++			power-domains = <&ps_ans>;
++		};
++
+ 		serial0: serial@20a0a0000 {
+ 			compatible = "apple,s5l-uart";
+ 			reg = <0x2 0x0a0a0000 0x0 0x4000>;
+diff --git a/arch/arm64/boot/dts/apple/t7000-common.dtsi b/arch/arm64/boot/dts/apple/t7000-common.dtsi
+index 0d40a5753..11f251162 100644
+--- a/arch/arm64/boot/dts/apple/t7000-common.dtsi
++++ b/arch/arm64/boot/dts/apple/t7000-common.dtsi
+@@ -12,6 +12,7 @@
+ / {
+ 	aliases {
+ 		ausbphy0 = &ausbphy0; /* Used by loader */
++		asp = &ans;
+ 		serial0 = &serial0;
+ 		serial6 = &serial6;
+ 	};
+@@ -32,6 +33,17 @@ reserved-memory {
+ 		#size-cells = <2>;
+ 		ranges;
+ 
++		ans_firmware: ans-firmware {
++			/* Filled in by bootloder */
++			reg = <0 0 0 0>;
++			no-map;
++		};
+ 		/* To be filled by loader */
+ 	};
+ };
++
++&ans {
++	memory-region = <&ans_firmware>;
++	memory-region-names = "firmware";
++	status = "okay";
++};
+diff --git a/arch/arm64/boot/dts/apple/t7000.dtsi b/arch/arm64/boot/dts/apple/t7000.dtsi
+index 2ebdfaa2c..ec21ec07f 100644
+--- a/arch/arm64/boot/dts/apple/t7000.dtsi
++++ b/arch/arm64/boot/dts/apple/t7000.dtsi
+@@ -119,6 +119,29 @@ cpufreq: performance-controller@202220000 {
+ 			#performance-domain-cells = <0>;
+ 		};
+ 
++		ans: block@208040000 {
++			compatible = "apple,t7000-ans", "apple,s5l8960x-ans";
++			reg = <0x2 0x08040000 0x0 0x1000>;
++			mboxes = <&ans_mbox>;
++			power-domains = <&ps_ans>;
++			resets = <&ps_ans>;
++			status = "disabled";
++		};
++
++		ans_mbox: mbox@208041000 {
++			compatible = "apple,t7000-akf-mailbox-v1", "apple,akf-mailbox-v1";
++			reg = <0x2 0x08041000 0x0 0x1000>;
++			interrupt-parent = <&aic>;
++			interrupts = <AIC_IRQ 36 IRQ_TYPE_LEVEL_HIGH>,
++				<AIC_IRQ 37 IRQ_TYPE_LEVEL_HIGH>,
++				<AIC_IRQ 38 IRQ_TYPE_LEVEL_HIGH>,
++				<AIC_IRQ 39 IRQ_TYPE_LEVEL_HIGH>;
++			interrupt-names = "send-empty", "send-not-empty",
++				"recv-empty", "recv-not-empty";
++			#mbox-cells = <0>;
++			power-domains = <&ps_ans>;
++		};
++
+ 		serial0: serial@20a0c0000 {
+ 			compatible = "apple,s5l-uart";
+ 			reg = <0x2 0x0a0c0000 0x0 0x4000>;
+diff --git a/arch/arm64/boot/dts/apple/t7001-air2.dtsi b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+index 637744c30..f7f1064ea 100644
+--- a/arch/arm64/boot/dts/apple/t7001-air2.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001-air2.dtsi
+@@ -12,6 +12,7 @@ / {
+ 
+ 	aliases {
+ 		wifi0 = &wifi0;
++		ans = &ans;
+ 	};
+ 
+ 	chosen {
+@@ -70,7 +71,11 @@ reserved-memory {
+ 		#size-cells = <2>;
+ 		ranges;
+ 
+-		/* To be filled by loader */
++		ans_firmware: ans-firmware {
++			/* Filled in by the loader. */
++			reg = <0 0 0 0>;
++			no-map;
++		};
+ 	};
+ 
+ 	battery_info: battery {
+@@ -88,6 +93,12 @@ wlan_vdd: regulator-wlan-vdd {
+ 	};
+ };
+ 
++&ans {
++	memory-region = <&ans_firmware>;
++	memory-region-names = "firmware";
++	status = "okay";
++};
++
+ &serial0 {
+ 	status = "okay";
+ };
+diff --git a/arch/arm64/boot/dts/apple/t7001.dtsi b/arch/arm64/boot/dts/apple/t7001.dtsi
+index c3ff5e058..6e6550196 100644
+--- a/arch/arm64/boot/dts/apple/t7001.dtsi
++++ b/arch/arm64/boot/dts/apple/t7001.dtsi
+@@ -20,6 +20,7 @@ / {
+ 	aliases {
+ 		ausbphy0 = &ausbphy0; /* Used by loader */
+ 		serial0 = &serial0;
++		asp = &ans;
+ 	};
+ 
+ 	clkref: clock-ref {
+@@ -133,6 +134,29 @@ cpufreq: performance-controller@202220000 {
+ 			#performance-domain-cells = <0>;
+ 		};
+ 
++		ans: block@208040000 {
++			compatible = "apple,t7001-ans", "apple,s5l8960x-ans";
++			reg = <0x2 0x08040000 0x0 0x1000>;
++			mboxes = <&ans_mbox>;
++			power-domains = <&ps_ans>;
++			resets = <&ps_ans>;
++			status = "disabled";
++		};
++
++		ans_mbox: mbox@208041000 {
++			compatible = "apple,t7000-akf-mailbox-v1", "apple,akf-mailbox-v1";
++			reg = <0x2 0x08041000 0x0 0x1000>;
++			interrupt-parent = <&aic>;
++			interrupts = <AIC_IRQ 36 IRQ_TYPE_LEVEL_HIGH>,
++				<AIC_IRQ 37 IRQ_TYPE_LEVEL_HIGH>,
++				<AIC_IRQ 38 IRQ_TYPE_LEVEL_HIGH>,
++				<AIC_IRQ 39 IRQ_TYPE_LEVEL_HIGH>;
++			interrupt-names = "send-empty", "send-not-empty",
++				"recv-empty", "recv-not-empty";
++			#mbox-cells = <0>;
++			power-domains = <&ps_ans>;
++		};
++
+ 		serial0: serial@20a0c0000 {
+ 			compatible = "apple,s5l-uart";
+ 			reg = <0x2 0x0a0c0000 0x0 0x4000>;
+diff --git a/drivers/block/Kconfig b/drivers/block/Kconfig
+index 858320b6e..27abb78c1 100644
+--- a/drivers/block/Kconfig
++++ b/drivers/block/Kconfig
+@@ -58,6 +58,17 @@ config ATARI_FLOPPY
+ 	tristate "Atari floppy support"
+ 	depends on ATARI
+ 
++config APPLE_ASP
++	tristate "Support for Apple ANS1 Storage Processor"
++	depends on APPLE_RTKIT && (ARCH_APPLE || COMPILE_TEST)
++	help
++	  The ASP controller is found on devices with Apple A7, A8, A8X
++	  SoCs. Say Y here to enable support for internal storage on
++	  Apple devices with these SoCs.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called asp.
++
+ config MAC_FLOPPY
+ 	tristate "Support for PowerMac floppy"
+ 	depends on PPC_PMAC && !PPC_PMAC64
+diff --git a/drivers/block/Makefile b/drivers/block/Makefile
+index 2d8096eb8..1fb9a2168 100644
+--- a/drivers/block/Makefile
++++ b/drivers/block/Makefile
+@@ -15,6 +15,7 @@ obj-$(CONFIG_BLK_DEV_FD)	+= floppy.o
+ obj-$(CONFIG_AMIGA_FLOPPY)	+= amiflop.o
+ obj-$(CONFIG_PS3_DISK)		+= ps3disk.o
+ obj-$(CONFIG_PS3_VRAM)		+= ps3vram.o
++obj-$(CONFIG_APPLE_ASP)		+= asp.o
+ obj-$(CONFIG_ATARI_FLOPPY)	+= ataflop.o
+ obj-$(CONFIG_AMIGA_Z2RAM)	+= z2ram.o
+ obj-$(CONFIG_N64CART)		+= n64cart.o
+diff --git a/drivers/block/asp.c b/drivers/block/asp.c
+new file mode 100644
+index 000000000..4e0cd6a9a
+--- /dev/null
++++ b/drivers/block/asp.c
+@@ -0,0 +1,1349 @@
++/* SPDX-License-Identifier: GPL-2.0 OR MIT */
++/*
++ * Apple ANS1 Storage Processor Driver
++ *
++ * Copyright (c) 2026 Nick Chan <towinchenmi@gmail.com>
++ */
++
++#define DEBUG 1
++#include <linux/async.h>
++#include <linux/blkdev.h>
++#include <linux/blk-mq.h>
++#include <linux/device.h>
++#include <linux/dma-mapping.h>
++#include <linux/dmapool.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/iopoll.h>
++#include <linux/jiffies.h>
++#include <linux/mempool.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_platform.h>
++#include <linux/once.h>
++#include <linux/platform_device.h>
++#include <linux/soc/apple/rtkit.h>
++#include <linux/pm_domain.h>
++#include <linux/reset.h>
++#include <linux/dmapool.h>
++
++#define DEVICE_NAME	"asp"
++#define DISK_NAME	"asp%dn%d"
++
++#define AKF_V1_REMAP_AP_LO	0x8
++#define AKF_V1_REMAP_AP_HI	0xc
++#define AKF_V1_REMAP_IOP_LO	0x10
++#define AKF_V1_REMAP_IOP_HI	0x14
++#define AKF_V1_REMAP_SZ_LO	0x18
++#define AKF_V1_REMAP_SZ_HI	0x1c
++#define AKF_V1_ENDIANNESS	0x20
++
++#define AKF_V1_LITTLE_ENDIAN	BIT(0)
++
++#define AKF_V1_CPU_CONTROL		0x28
++#define AKF_V1_CPU_CONTROL_START	BIT(4)
++
++/*
++ * The command buffer must be less than 262144 bytes, and must be alinged
++ * to cacheline. Dividing equally yields 16320 bytes per tag.
++ */
++#define ASP_TAG_SIZE	16320
++#define ASP_NUM_TAGS	16
++#define ASP_QUEUE_SIZE  (ASP_TAG_SIZE * ASP_NUM_TAGS)
++
++#define ASP_TIMEOUT_MS		30000
++#define ASP_CMD_HDR_SIZE	0x30
++
++#define ASP_CMD_MAX_SECTORS	(ASP_TAG_SIZE - ASP_CMD_HDR_SIZE) \
++				/ sizeof(uint32_t)
++
++/*
++ * All ASP instances seen uses 4096 bytes sector size. Since this hardware is
++ * already replaced by NVMe, it is unlikely any other sector sizes will be
++ * used in practice.
++ */
++#define ASP_LBA_SHIFT	12
++#define ASP_LBA_SIZE	BIT(ASP_LBA_SHIFT)
++
++/* ASP Commands */
++#define ASP_CMD_IDENTIFY	0x0
++#define ASP_CMD_READ_USERAREA	0x10
++#define ASP_CMD_WRITE_USERAREA	0x11
++#define ASP_CMD_FLUSH		0x13
++
++#define ASP_CMD_FORMAT_ALL	0x15
++#define ASP_CMD_FORMAT_USERAREA	0x16
++#define ASP_CMD_FORMAT_CLEAR	0x18
++
++#define ASP_CMD_WRITE_UNLOCK	0x19
++
++#define ASP_CMD_OP_READ_LLB		0x30
++#define ASP_CMD_OP_READ_FW		0x31
++#define ASP_CMD_OP_READ_UTILDM		0x32
++#define ASP_CMD_OP_READ_DM		0x33
++#define ASP_CMD_OP_READ_CTRLBITS	0x34
++#define ASP_CMD_OP_READ_EFFACE		0x35
++#define ASP_CMD_OP_READ_NVRAM		0x36
++#define ASP_CMD_OP_READ_SYSCFG		0x37
++#define ASP_CMD_OP_READ_PANICLOG	0x38
++
++#define ASP_CMD_OP_WRITE_LLB		0x40
++#define ASP_CMD_OP_WRITE_FW		0x41
++#define ASP_CMD_OP_WRITE_UTILDM		0x42
++#define ASP_CMD_OP_WRITE_DM		0x43
++#define ASP_CMD_OP_WRITE_CTRLBITS	0x44
++#define ASP_CMD_OP_WRITE_EFFACE		0x45
++#define ASP_CMD_OP_WRITE_NVRAM		0x46
++#define ASP_CMD_OP_WRITE_SYSCFG		0x47
++#define ASP_CMD_OP_WRITE_PANICLOG	0x48
++
++#define ASP_CMD_OP_GET_PPN_FW_VERSION	0x79
++#define ASP_CMD_OP_POWER_CONFIG		0x80
++
++/*
++ * Auxiliary Storage Sizes
++ *
++ * Hardcode the sizes as there are no way to get the size of auxiliary
++ * storage sizes from the firmware.
++ */
++#define ASP_FW_NUM_SECTORS		1024
++#define ASP_LLB_NUM_SECTORS		254
++#define ASP_UTILDM_NUM_SECTORS		2
++#define ASP_DM_NUM_SECTORS		32
++#define ASP_CTRLBITS_NUM_SECTORS 	32
++#define ASP_EFFACE_NUM_SECTORS		32
++#define ASP_NVRAM_NUM_SECTORS		32
++#define ASP_SYSCFG_NUM_SECTORS		256
++#define ASP_PANICLOG_NUM_SECTORS	256
++
++/* Mailbox messages */
++#define ASP_MSG_TYPE			GENMASK(3, 0)
++#define ASP_MSG_TYPE_SET_CMDBUF		0
++#define ASP_MSG_TYPE_SET_TAG_OFF	1
++#define ASP_MSG_TYPE_COMPLETE		2
++#define ASP_MSG_TYPE_SUBMIT		3
++#define ASP_MSG_TYPE_UNK4		4
++
++#define ASP_SET_CMDBUF_BASE		GENMASK_ULL(55, 16)
++#define ASP_SET_CMDBUF_SIZE_17_6	GENMASK(15, 4)
++
++#define ASP_SET_TAG_CMDBUF_SIZE_17_6	GENMASK_ULL(35, 24)
++#define ASP_SET_TAG_CMDBUF_OFF_17_6	GENMASK(23, 12)
++#define ASP_SET_TAG_CMDBUF_TAG		GENMASK(7, 4)
++
++#define ASP_SUBMIT_OP			GENMASK(19, 12)
++#define ASP_SUBMIT_OP_RING		0xff
++#define ASP_SUBMIT_TAG			GENMASK(7, 4)
++
++/*
++ * This is wider than the submission tag, since ANS1 will send
++ * two special tags during startup:
++ *
++ * 254 - sent automatically soon after ANS endpoint is enabled,
++ * possibly ready signal
++ *
++ * 253 - reply of ASP_MSG_TYPE_SET_CMDBUF
++ */
++#define ASP_COMPLETION_TAG		GENMASK(11, 4)
++#define ASP_COMPLETION_TAG_READY		254
++#define ASP_COMPLETION_TAG_CMDBUF_OK		253
++
++#define ASP_COMPLETION_STATUS		GENMASK(15, 12)
++#define ASP_COMPLETION_STATUS_OK	0
++#define ASP_COMPLETION_STATUS_IGNORED 	1 /* not exist command */
++#define ASP_COMPLETION_STATUS_ABORT	2
++#define ASP_COMPLETION_STATUS_INIT  	0xa /* Seen with the special tags */
++
++/*
++ * Without this flag the operation would still take place but instead of
++ * the intended data garbage corresponding to the input data in 128-bit
++ * block sizes would be used, so likely encryption.
++ */
++#define ASP_CMD_IO_FLAG_NO_ENCRYPTION BIT(3)
++
++/*
++ * this enum is used to generate hardware operations, so do not change the order
++ * of items.
++ */
++enum asp_queue_type {
++	ASP_QUEUE_TYPE_ADMIN = 0,
++	ASP_QUEUE_TYPE_USERAREA,
++	ASP_QUEUE_TYPE_LLB,
++	ASP_QUEUE_TYPE_FW,
++	ASP_QUEUE_TYPE_UTILDM,
++	ASP_QUEUE_TYPE_DM,
++	ASP_QUEUE_TYPE_CTRLBITS,
++	ASP_QUEUE_TYPE_EFFACE,
++	ASP_QUEUE_TYPE_NVRAM,
++	ASP_QUEUE_TYPE_SYSCFG,
++	ASP_QUEUE_TYPE_PANICLOG,
++	ASP_QUEUE_TYPE_COUNT
++};
++
++struct asp_identify {
++	u32 num_lba_formatted;
++	u32 lba_size;
++	u8 unk1[8];
++	bool util_formatted;
++	u8 unk2[7];
++	u32 num_lba_raw;
++	u8 unk3[20];
++	u8 chip_id_bus0[6];
++	u8 chip_id_bus1[6];
++	u8 manufacturer_id_bus0[6];
++	u8 manufacturer_id_bus1[6];
++}__attribute__((packed));
++
++struct asp_ppn_fw {
++	u32 fw_ver_len;
++	char fw_ver[0x10][2];
++}__attribute__((packed));
++
++struct asp_rw {
++	u32 sglist[ASP_CMD_MAX_SECTORS];
++};
++
++struct asp_cmd_hdr {
++	u8 op;
++	u8 tag;
++	u16 flags;
++	u32 slba;
++	u32 length;
++	u8 pad[0x24];
++}__attribute__((packed));
++
++struct asp_queue {
++	enum asp_queue_type type;
++	struct gendisk *disk;
++};
++
++struct apple_asp {
++	void *__iomem akf_base;
++	sector_t capacity;
++	struct device *dev;
++	struct apple_rtkit *rtk;
++	struct completion init_done;
++	int init_ret;
++	int instance;
++	void *q;
++	struct request_queue *admin_rq;
++	struct blk_mq_tag_set tagset;
++	union {
++		struct asp_queue qd_head; /* for container_of() */
++		struct asp_queue q_data[ASP_QUEUE_TYPE_COUNT];
++	};
++	dma_addr_t q_iova;
++	mempool_t *iod_mempool;
++	u32 lba_size;
++	u8 ep;
++};
++
++struct asp_iod {
++	struct asp_cmd_hdr cmd;
++	int nr_mapped;
++	struct scatterlist *sg;
++	int nents;
++	void *buffer;
++	size_t buf_len;
++	u8 status;
++};
++
++// BLK_STS_MEDIUM
++static bool enable_reformat;
++module_param(enable_reformat, bool, 0644);
++MODULE_PARM_DESC(enable_reformat, "Automatically format unformatted media");
++
++//static int asp_major;
++static DEFINE_IDA(asp_instance_ida);
++
++/*
++ * The information about unknown commands in this function is derived by
++ * attempting command execution when the write lock is still armed.
++ */
++static bool asp_is_write(struct asp_cmd_hdr *cmd)
++{
++	switch (cmd->op) {
++		case ASP_CMD_IDENTIFY:
++		case ASP_CMD_READ_USERAREA:
++		case ASP_CMD_FLUSH:
++			return false;
++		case ASP_CMD_WRITE_USERAREA:
++		case ASP_CMD_FORMAT_ALL:
++		case ASP_CMD_FORMAT_USERAREA:
++		case ASP_CMD_FORMAT_CLEAR:
++			return true;
++		case ASP_CMD_WRITE_UNLOCK:
++			return false;
++		case ASP_CMD_OP_READ_LLB:
++		case ASP_CMD_OP_READ_FW:
++		case ASP_CMD_OP_READ_UTILDM:
++		case ASP_CMD_OP_READ_DM:
++		case ASP_CMD_OP_READ_CTRLBITS:
++		case ASP_CMD_OP_READ_EFFACE:
++		case ASP_CMD_OP_READ_NVRAM:
++		case ASP_CMD_OP_READ_SYSCFG:
++		case ASP_CMD_OP_READ_PANICLOG:
++			return false;
++		case ASP_CMD_OP_WRITE_LLB:
++		case ASP_CMD_OP_WRITE_FW:
++		case ASP_CMD_OP_WRITE_UTILDM:
++		case ASP_CMD_OP_WRITE_DM:
++		case ASP_CMD_OP_WRITE_CTRLBITS:
++		case ASP_CMD_OP_WRITE_EFFACE:
++		case ASP_CMD_OP_WRITE_NVRAM:
++		case ASP_CMD_OP_WRITE_SYSCFG:
++		case ASP_CMD_OP_WRITE_PANICLOG:
++			return true;
++		case 0x50:
++		case 0x51:
++		case 0x52:
++			return true;
++		case 0x72:
++		case 0x73:
++		case 0x74:
++		case 0x75:
++		case 0x76:
++		case 0x77:
++		case 0x78:
++		case ASP_CMD_OP_GET_PPN_FW_VERSION:
++			return false;
++		case 0x7a:
++			return true;
++		case 0x7b:
++		case 0x7c:
++		case 0x7d:
++		case 0x7e:
++		case 0x7f:
++		case 0x80:
++		case 0x81:
++		case 0x82:
++		case 0x90:
++			return false;
++		case 0x91:
++			return true;
++		case 0xa0:
++		case 0xa1:
++			return false;
++		default:
++			/*
++			 * Observation-only hardening: an unrecognized admin
++			 * opcode reaching here is an internal-consistency bug
++			 * (this driver only ever constructs opcodes from its
++			 * own known set), not something a crash improves.
++			 * Conservatively classify it as a write -- callers
++			 * only use this to decide REQ_OP_DRV_OUT vs _IN, and
++			 * asp_setup_cmd() below unconditionally rejects any
++			 * write in this build regardless, so the safe
++			 * direction to guess wrong in is "write."
++			 */
++			WARN_ON(1);
++			return true;
++	};
++}
++
++static enum req_op asp_req_op(struct asp_cmd_hdr *cmd)
++{
++	return asp_is_write(cmd) ? REQ_OP_DRV_OUT : REQ_OP_DRV_IN;
++}
++
++static int apple_asp_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
++			       unsigned int hctx_idx)
++{
++	hctx->driver_data = data;
++
++	return 0;
++}
++
++static struct apple_asp *queue_to_apple_asp(struct asp_queue *aq)
++{
++	return container_of(aq - aq->type, struct apple_asp, qd_head);
++}
++
++static void *asp_q_cmd_hdr(struct apple_asp *asp, struct asp_cmd_hdr *cmd)
++{
++	return asp->q + (cmd->tag * ASP_TAG_SIZE);
++}
++
++static void *asp_q_cmd_data(struct apple_asp *asp, struct asp_cmd_hdr *cmd)
++{
++	return asp->q + (cmd->tag * ASP_TAG_SIZE) + ASP_CMD_HDR_SIZE;
++}
++
++static blk_status_t asp_setup_rw(struct asp_queue *qd, struct request *req,
++				 bool write)
++{
++	struct asp_iod *iod = blk_mq_rq_to_pdu(req);
++	struct asp_cmd_hdr *cmd = &iod->cmd;
++	struct apple_asp *asp = queue_to_apple_asp(qd);
++	struct req_iterator iter;
++       	struct bio_vec bvec;
++
++	switch (qd->type) {
++		case ASP_QUEUE_TYPE_ADMIN:
++			/*
++			 * Observation-only hardening: admin requests never
++			 * reach the rw setup path in normal operation
++			 * (asp_setup_cmd() only calls this for REQ_OP_READ/
++			 * WRITE), so this is an internal-consistency bug,
++			 * not a crash-worthy one.
++			 */
++			WARN_ON(1);
++			return BLK_STS_IOERR;
++		case ASP_QUEUE_TYPE_USERAREA:
++			cmd->op = 0x10 | write;
++			break;
++		case ASP_QUEUE_TYPE_LLB:
++		case ASP_QUEUE_TYPE_FW:
++		case ASP_QUEUE_TYPE_UTILDM:
++		case ASP_QUEUE_TYPE_DM:
++		case ASP_QUEUE_TYPE_CTRLBITS:
++		case ASP_QUEUE_TYPE_EFFACE:
++		case ASP_QUEUE_TYPE_NVRAM:
++		case ASP_QUEUE_TYPE_SYSCFG:
++		case ASP_QUEUE_TYPE_PANICLOG:
++			cmd->op = (write ? 0x40 : 0x30) | (qd->type - 2);
++			break;
++		default:
++			/* Same reasoning: unreachable in practice, but a
++			 * clean I/O error beats taking the kernel down.
++			 */
++			WARN_ON(1);
++			return BLK_STS_IOERR;
++	}
++
++	cmd->flags = ASP_CMD_IO_FLAG_NO_ENCRYPTION;
++	cmd->slba = blk_rq_pos(req) >> 3;
++	cmd->length = blk_rq_bytes(req) >> ASP_LBA_SHIFT;
++
++	iod->sg = mempool_alloc(asp->iod_mempool, GFP_ATOMIC);
++	if (!iod->sg)
++		return BLK_STS_RESOURCE;
++
++	sg_init_table(iod->sg, blk_rq_nr_phys_segments(req));
++	iod->nents = blk_rq_map_sg(req, iod->sg);
++
++	if (!iod->nents)
++		goto out_free_sg;
++
++	iod->nr_mapped = dma_map_sg_attrs(asp->dev, iod->sg, iod->nents,
++					  rq_dma_dir(req), DMA_ATTR_NO_WARN);
++
++	if (!iod->nr_mapped)
++		goto out_free_sg;
++
++	//dev_dbg(asp->dev, "queue type: %d nr_mapped: %d", qd->type, iod->nr_mapped);
++
++	if (qd->type > ASP_QUEUE_TYPE_USERAREA
++	    && rq_dma_dir(req) == DMA_FROM_DEVICE) {
++		/*
++		 * If reading auxiliary storage, then zero the dma memory
++		 * beforehand, as the request gets truncated when trying to
++		 * read "unwritten" sectors.
++		 *
++		 * This matches iOS' behavior except in the case where the
++		 * first sector is unwritten due to an iOS bug.
++		 */
++		rq_for_each_segment(bvec, req, iter)
++			memzero_bvec(&bvec);
++	}
++
++	return BLK_STS_OK;
++
++out_free_sg:
++	mempool_free(iod->sg, asp->iod_mempool);
++	return BLK_STS_RESOURCE;
++}
++
++/*
++ * The controller requires writes to auxiliary storage to start at sector 0,
++ * so do not bother with their write support for now.
++ */
++
++/*
++ * UTILDM, DM, CTRLBITS seems to be controller internal data and putting the
++ * wrong things in them could cause persistent firmware crashes so do not
++ * allow writes to them.
++ *
++ * The controller does not allow writing to UTILDM (maximum allowed size
++ * for writing is 0), and DM has a minimum write size requirement of
++ * 12 sectors, though this does not matter since we set it to read-only
++ * anyways.
++ */
++
++static blk_status_t asp_setup_cmd(struct asp_queue *qd, struct request *req)
++{
++	blk_status_t ret;
++	struct asp_iod *iod = blk_mq_rq_to_pdu(req);
++	struct asp_cmd_hdr *cmd = &iod->cmd;
++
++	cmd->tag = req->tag;
++
++	/*
++	 * Observation-only hardening: this build never accepts anything that
++	 * could mutate media, at this single, central dispatch point that
++	 * every namespace's requests pass through -- independent of, not a
++	 * replacement for, the WRITE_UNLOCK removal and set_disk_ro() calls
++	 * elsewhere in this file. REQ_OP_DRV_OUT covers internally-classified
++	 * "write" admin commands (see asp_is_write()); no legitimate one of
++	 * those remains once WRITE_UNLOCK itself is never issued. See
++	 * docs/plans/2026-09-13-j81-ans1-observation-only.md.
++	 */
++	switch (req_op(req)) {
++		case REQ_OP_WRITE:
++		case REQ_OP_DRV_OUT:
++		case REQ_OP_FLUSH:
++			return BLK_STS_NOTSUPP;
++		default:
++			break;
++	}
++
++	switch (req_op(req)) {
++		/* already setup */
++		case REQ_OP_DRV_IN:
++			ret = BLK_STS_OK;
++			break;
++
++		case REQ_OP_READ:
++			ret = asp_setup_rw(qd, req, false);
++			break;
++
++		default:
++			ret = BLK_STS_NOTSUPP;
++			break;
++	}
++
++	return ret;
++}
++
++static blk_status_t apple_asp_submit_cmd(struct apple_asp *asp,
++					 struct asp_cmd_hdr *cmd)
++{
++	int ret;
++
++	memcpy(asp_q_cmd_hdr(asp, cmd), cmd, ASP_CMD_HDR_SIZE);
++
++	dma_wmb();
++	//dev_info(asp->dev, "tag: %d", cmd->tag);
++	/*
++	 * Observation-only hardening: the tag set is sized to ASP_NUM_TAGS
++	 * (16) by this same driver, so an out-of-range tag here is an
++	 * internal-consistency bug. Fail that one request rather than the
++	 * whole kernel.
++	 */
++	if (WARN_ON(cmd->tag >= 16))
++		return BLK_STS_IOERR;
++
++	u64 rtk_msg = FIELD_PREP(ASP_MSG_TYPE, ASP_MSG_TYPE_SUBMIT)
++		      | FIELD_PREP(ASP_SUBMIT_TAG, cmd->tag)
++		      | FIELD_PREP(ASP_SUBMIT_OP, ASP_SUBMIT_OP_RING);
++
++	ret = apple_rtkit_send_message(asp->rtk, asp->ep, rtk_msg, NULL, false);
++	if (ret == -ETIMEDOUT)
++		return BLK_STS_TIMEOUT;
++	else if (ret < 0)
++		return BLK_STS_IOERR;
++
++	return BLK_STS_OK;
++}
++
++static void asp_setup_hw_sgl(struct apple_asp *asp, struct asp_iod *iod)
++{
++	int i, hw_idx = 0;
++	struct scatterlist *sg;
++	u32 *hw_sgl = asp_q_cmd_data(asp, &iod->cmd);
++
++	for_each_sg(iod->sg, sg, iod->nr_mapped, i) {
++		unsigned int len = sg_dma_len(sg);
++		dma_addr_t addr = sg_dma_address(sg);
++
++		while (len) {
++			//dev_dbg(asp->dev, "HW SGL IDX: %d addr 0x%llx len 0x%x", hw_idx, addr, len);
++
++			/*
++			 * Observation-only hardening: check *before* writing,
++			 * not after. The original BUG_ON(hw_idx >
++			 * ASP_CMD_MAX_SECTORS) ran only once, after the loop
++			 * had already finished -- by the time it fired, the
++			 * out-of-bounds write into hw_sgl[] had already
++			 * happened. blk-mq's own queue_limits (max_hw_sectors/
++			 * max_segments, set in apple_asp_start_disk()) should
++			 * make this unreachable in practice; this is defense
++			 * in depth, not a expected path.
++			 */
++			if (WARN_ON(hw_idx >= ASP_CMD_MAX_SECTORS))
++				return;
++
++			hw_sgl[hw_idx++] = addr >> ASP_LBA_SHIFT;
++
++			addr += ASP_LBA_SIZE;
++			len -= ASP_LBA_SIZE;
++		}
++
++	}
++}
++
++static bool apple_asp_is_aux_read(struct asp_cmd_hdr *cmd)
++{
++	switch (cmd->op) {
++		case ASP_CMD_OP_READ_LLB:
++		case ASP_CMD_OP_READ_FW:
++		case ASP_CMD_OP_READ_UTILDM:
++		case ASP_CMD_OP_READ_DM:
++		case ASP_CMD_OP_READ_CTRLBITS:
++		case ASP_CMD_OP_READ_EFFACE:
++		case ASP_CMD_OP_READ_NVRAM:
++		case ASP_CMD_OP_READ_SYSCFG:
++		case ASP_CMD_OP_READ_PANICLOG:
++			return true;
++	}
++
++	return false;
++}
++
++static blk_status_t apple_asp_queue_rq(struct blk_mq_hw_ctx *hctx,
++				       const struct blk_mq_queue_data *bd)
++{
++	struct asp_queue *qd = hctx->queue->queuedata;
++	struct apple_asp *asp = queue_to_apple_asp(qd);
++	struct request *req = bd->rq;
++	struct asp_iod *iod = blk_mq_rq_to_pdu(req);
++	blk_status_t ret;
++
++	ret = asp_setup_cmd(qd, req);
++	if (ret)
++		return ret;
++
++	if (iod->sg)
++		asp_setup_hw_sgl(asp, iod);
++
++	blk_mq_start_request(req);
++
++	ret = apple_asp_submit_cmd(asp, &iod->cmd);
++	if (ret)
++		return ret;
++
++	return BLK_STS_OK;
++}
++
++/* don't need this i think */
++#if 0
++static int apple_asp_init_request(struct blk_mq_tag_set *set
++				  struct request *req, unsigned int hctx_idx,
++                                  int numa_node)
++{
++	struct apple_asp *asp = set->driver_data;
++	struct asp_queue *qd = req->q->queuedata;
++	struct asp_iod *iod = blk_mq_rq_to_pdu(req);
++
++	return 0;
++}
++#endif
++
++static blk_status_t asp_submit_sync_admin_cmd(struct request_queue *q,
++					      struct asp_cmd_hdr *cmd,
++					      void *buffer, size_t buf_len)
++{
++	struct request *req;
++	struct asp_iod *iod;
++	blk_status_t ret;
++	blk_mq_req_flags_t blk_flags = 0;
++
++	if (cmd->length)
++		return -EOPNOTSUPP;
++
++	req = blk_mq_alloc_request(q, asp_req_op(cmd), blk_flags);
++
++	if (IS_ERR(req))
++		return PTR_ERR(req);
++
++	iod = blk_mq_rq_to_pdu(req);
++
++	memcpy(&iod->cmd, cmd, ASP_CMD_HDR_SIZE);
++	iod->buffer = buffer;
++	iod->buf_len = buf_len;
++
++	ret = blk_execute_rq(req, false);
++	blk_mq_free_request(req);
++
++	return ret;
++}
++
++#if 0
++static enum blk_eh_timer_return apple_asp_timeout(struct request *req)
++{
++	struct asp_queue *qd = req->q->queuedata;
++	struct asp_iod *iod = blk_mq_rq_to_pdu(req);
++	struct apple_asp *asp = queue_to_apple_asp(qd);
++
++	/* soft-reset the controller since commands cannot be aborted */
++	dev_warn(asp-dev, "I/O %d:%d timeout: resetting controller",
++			   qd->type, req->tag);
++
++	/* freeze all queues while it is resetting */
++	blk_mq_freeze_queue(asp->admin_rq);
++	for (int i = ASP_QUEUE_TYPE_USERAREA; i < ASP_QUEUE_TYPE_COUNT; i++)
++		blk_mq_freeze_queue(asp->q_data[i].disk->queue);
++
++
++	if (!apple_rtkit_is_running(asp->rtk)) {
++		/*
++		 * the storage firmware is loaded by previous stages, so
++		 * recovery cannot be implemented.
++		 */
++		dev_err(asp->dev, "RTKit has crashed; cannot recover.")
++		return BLK_EH_DONE;
++	}
++
++	ret = apple_rtkit_shutdown(asp->rtk)
++	if (ret < 0) {
++		dev_err(asp->dev, "Failed to shutdown RTKit: %d", ret);
++		return BLK_EH_DONE;
++	}
++
++	/* Turn it back on */
++
++	blk_mq_unfreeze_queue(asp->admin_rq);
++	for (int i = ASP_QUEUE_TYPE_USERAREA; i < ASP_QUEUE_TYPE_COUNT; i++)
++		blk_mq_unfreeze_queue(asp->q_data[i].disk->queue);
++
++	return BLK_EH_DONE;
++}
++#endif
++
++static void apple_asp_complete_rq(struct request *rq)
++{
++	struct asp_queue *qd = rq->q->queuedata;
++	struct asp_iod *iod = blk_mq_rq_to_pdu(rq);
++	struct apple_asp *asp = queue_to_apple_asp(qd);
++
++	if (iod->sg) {
++		dma_unmap_sg(asp->dev, iod->sg, iod->nents, rq_dma_dir(rq));
++		mempool_free(iod->sg, asp->iod_mempool);
++	}
++
++	switch (iod->status) {
++		case ASP_COMPLETION_STATUS_OK:
++			blk_mq_end_request(rq, BLK_STS_OK);
++			break;
++		case ASP_COMPLETION_STATUS_IGNORED:
++			blk_mq_end_request(rq, BLK_STS_NOTSUPP);
++			break;
++		case ASP_COMPLETION_STATUS_ABORT:
++			/*
++			 * When reading auxiliary storage, if the starting
++			 * sector is unwritten, then the request will fail with
++			 * ASP_COMPLETION_STATUS_ABORT. Consider this case a
++			 * success (the zeroing is already done in
++			 * asp_setup_rw())
++			 */
++			if (apple_asp_is_aux_read(&iod->cmd)) {
++				blk_mq_end_request(rq, BLK_STS_OK);
++				break;
++			}
++		fallthrough;
++		default:
++			blk_mq_end_request(rq, BLK_STS_IOERR);
++			break;
++	}
++}
++
++static const struct blk_mq_ops apple_asp_queue_ops = {
++	.queue_rq = apple_asp_queue_rq,
++	.complete = apple_asp_complete_rq,
++	//.init_request = apple_asp_init_request,
++	.init_hctx = apple_asp_init_hctx,
++	//.timeout = apple_asp_timeout,
++};
++
++/*
++ * Compute reserve memory size needed for the driver to complete a
++ * a request, even when under memory pressure, so things like swap
++ * can work
++ */
++static inline size_t apple_asp_iod_alloc_size(void)
++{
++	return (ASP_CMD_MAX_SECTORS * sizeof(struct scatterlist));
++}
++
++static const struct block_device_operations asp_fops = {
++	.owner          = THIS_MODULE,
++};
++
++/* called when ASP is ready to receive commands */
++static int apple_asp_start_disk(struct apple_asp *asp)
++{
++	int ret;
++	int disk_added;
++	blk_status_t status;
++	struct asp_cmd_hdr *cmd;
++	struct asp_identify *identify;
++
++	ret = ida_alloc(&asp_instance_ida, GFP_KERNEL);
++	if (ret < 0)
++		return ret;
++
++	asp->instance = ret;
++	asp->iod_mempool = mempool_create_kmalloc_pool(1,
++				apple_asp_iod_alloc_size());
++
++	if (!asp->iod_mempool) {
++		ret = -ENOMEM;
++		goto out_free_ida;
++	}
++
++	asp->tagset.ops = &apple_asp_queue_ops;
++	asp->tagset.nr_hw_queues = 1;
++	asp->tagset.queue_depth = ASP_NUM_TAGS;
++	asp->tagset.timeout = ASP_TIMEOUT_MS;
++	asp->tagset.numa_node = NUMA_NO_NODE;
++	asp->tagset.cmd_size = sizeof(struct asp_iod);
++	asp->tagset.driver_data = asp;
++
++	dev_dbg(asp->dev, "allocating tag set");
++	ret = blk_mq_alloc_tag_set(&asp->tagset);
++
++	if (ret < 0) {
++		dev_err(asp->dev, "unable to allocate tag set");
++		goto out_destroy_mempool;
++	}
++
++	for (int i = 0; i < ASP_QUEUE_TYPE_COUNT; i++)
++		asp->q_data[i].type = i;
++
++	dev_dbg(asp->dev, "allocating request queues");
++
++	asp->admin_rq = blk_mq_alloc_queue(&asp->tagset, NULL, &asp->q_data[0]);
++	if (IS_ERR(asp->admin_rq)) {
++		ret = dev_err_probe(asp->dev, PTR_ERR(asp->admin_rq),
++				    "unable to allocate admin request queue");
++		goto out_free_tag_set;
++	}
++
++	// identify
++	// one queue for each namespace
++	cmd = kmalloc_obj(struct asp_cmd_hdr);
++	if (IS_ERR(cmd)) {
++		ret = -ENOMEM;
++		goto out_free_admin_rq;
++	}
++
++	identify = kmalloc_obj(struct asp_identify);
++	if (IS_ERR(identify)) {
++		ret = -ENOMEM;
++		goto out_free_cmd;
++	}
++
++	cmd->op = ASP_CMD_IDENTIFY;
++	cmd->flags = 0;
++	cmd->slba = 0;
++	cmd->length = 0;
++
++	status = asp_submit_sync_admin_cmd(asp->admin_rq, cmd, identify,
++					   sizeof(struct asp_identify));
++	if (status) {
++		dev_dbg(asp->dev, "identify controller failure status: %d",
++			status);
++		ret = -EIO;
++		goto out_free_id_data;
++	}
++
++	// TODO support auto reformat (with module arg?)
++	if (!identify->util_formatted) {
++		dev_err(asp->dev, "media not formatted");
++		ret = -ENXIO;
++		goto out_free_id_data;
++	}
++
++	if (identify->lba_size != ASP_LBA_SIZE) {
++		dev_err(asp->dev, "unsupported LBA size %d",
++			identify->lba_size);
++		ret = -EOPNOTSUPP;
++		goto out_free_id_data;
++	}
++
++	dev_dbg(asp->dev, "ASP block device %llu bytes",
++		(u64)identify->num_lba_formatted * identify->lba_size);
++
++	asp->capacity = identify->num_lba_formatted;
++
++	kfree(identify);
++
++	/*
++	 * Observation-only hardening: deliberately never issue
++	 * ASP_CMD_WRITE_UNLOCK. Upstream calls this unconditionally here as
++	 * part of normal probe, immediately unlocking writes to every
++	 * namespace at the controller/firmware level -- its own comment a
++	 * few lines below (kept, see the set_disk_ro block) admits that
++	 * putting the wrong things in some of them "could cause persistent
++	 * controller crashes." This build is read-only by construction: the
++	 * controller itself is never asked to unlock writes in the first
++	 * place, on top of the block-layer read-only marking below and
++	 * asp_setup_cmd()'s own hard rejection of any write/flush request.
++	 * See docs/plans/2026-09-13-j81-ans1-observation-only.md.
++	 */
++
++	struct queue_limits lim = {
++		.logical_block_size = ASP_LBA_SIZE,
++		.max_hw_sectors = ASP_CMD_MAX_SECTORS,
++		/* only constrianted by max_hw_sectors */
++		.max_segments = USHRT_MAX,
++		.max_segment_size = UINT_MAX,
++		.features = BLK_FEAT_WRITE_CACHE,
++	};
++
++	for (int i = ASP_QUEUE_TYPE_USERAREA; i < ASP_QUEUE_TYPE_COUNT; i++) {
++		struct gendisk *disk;
++
++		asp->q_data[i].disk = blk_mq_alloc_disk(&asp->tagset, &lim,
++							&asp->q_data[i]);
++		disk = asp->q_data[i].disk;
++
++		if (!disk) {
++			ret = -ENOMEM;
++			goto out_free_disk;
++		}
++		snprintf(disk->disk_name, sizeof(disk->disk_name), "asp%dn%d",
++			 asp->instance, i);
++
++		disk->fops = &asp_fops;
++		disk->private_data = asp;
++	}
++
++	/*
++	 * Auxiliary storage can only be written if starting LBA is zero,
++	 * and certain ones has additional constriants, so don't bother
++	 * with write support for them for now.
++	 *
++	 * Enabling writes to certain namespaces is also unsafe as putting
++	 * the wrong things in some of them could cause persistent controller
++	 * crashes.
++	 *
++	 * Eventually though it would be nie to support things like writing
++	 * NVRAM, so set it to RO outside of the loop such that the statement
++	 * can be removed on per-namespace basis.
++	 *
++	 * Observation-only hardening: upstream leaves USERAREA -- the actual
++	 * iOS user-data partition, the one namespace WRITE_UNLOCK above
++	 * existed to enable -- writable by omission from this list. Force it
++	 * read-only too, so every namespace this driver exposes is read-only,
++	 * with no exception, in this build.
++	 */
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_USERAREA].disk, true);
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_LLB].disk, true);
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_FW].disk, true);
++	/* write disallowed at controller level */
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_UTILDM].disk, true);
++	/* unsafe to write */
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_DM].disk, true);
++	/* unsafe to write */
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_CTRLBITS].disk, true);
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_EFFACE].disk, true);
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_NVRAM].disk, true);
++	/*
++	 * unrecoverable even with DFU, but some applications may want to
++	 * write it anyways
++	 */
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_SYSCFG].disk, true);
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_PANICLOG].disk, true);
++
++	/* no partitions on auxiliary storage */
++	asp->q_data[ASP_QUEUE_TYPE_LLB].disk->flags = GENHD_FL_NO_PART;
++	asp->q_data[ASP_QUEUE_TYPE_FW].disk->flags = GENHD_FL_NO_PART;
++	asp->q_data[ASP_QUEUE_TYPE_UTILDM].disk->flags = GENHD_FL_NO_PART;
++	asp->q_data[ASP_QUEUE_TYPE_DM].disk->flags = GENHD_FL_NO_PART;
++	asp->q_data[ASP_QUEUE_TYPE_CTRLBITS].disk->flags = GENHD_FL_NO_PART;
++	asp->q_data[ASP_QUEUE_TYPE_EFFACE].disk->flags = GENHD_FL_NO_PART;
++	asp->q_data[ASP_QUEUE_TYPE_NVRAM].disk->flags = GENHD_FL_NO_PART;
++	asp->q_data[ASP_QUEUE_TYPE_SYSCFG].disk->flags = GENHD_FL_NO_PART;
++	asp->q_data[ASP_QUEUE_TYPE_PANICLOG].disk->flags = GENHD_FL_NO_PART;
++
++	/* convert 4096-byte sectors to 512-byte sectors */
++	set_capacity(asp->q_data[ASP_QUEUE_TYPE_USERAREA].disk,
++		     asp->capacity << 3);
++	set_capacity(asp->q_data[ASP_QUEUE_TYPE_LLB].disk,
++		     ASP_LLB_NUM_SECTORS << 3);
++	set_capacity(asp->q_data[ASP_QUEUE_TYPE_FW].disk,
++		     ASP_FW_NUM_SECTORS << 3);
++	set_capacity(asp->q_data[ASP_QUEUE_TYPE_UTILDM].disk,
++		     ASP_UTILDM_NUM_SECTORS << 3);
++	set_capacity(asp->q_data[ASP_QUEUE_TYPE_DM].disk,
++		     ASP_DM_NUM_SECTORS << 3);
++	set_capacity(asp->q_data[ASP_QUEUE_TYPE_CTRLBITS].disk,
++		     ASP_CTRLBITS_NUM_SECTORS << 3);
++	set_capacity(asp->q_data[ASP_QUEUE_TYPE_EFFACE].disk,
++		     ASP_EFFACE_NUM_SECTORS << 3);
++	set_capacity(asp->q_data[ASP_QUEUE_TYPE_NVRAM].disk,
++		     ASP_NVRAM_NUM_SECTORS << 3);
++	set_capacity(asp->q_data[ASP_QUEUE_TYPE_SYSCFG].disk,
++		     ASP_SYSCFG_NUM_SECTORS << 3);
++	set_capacity(asp->q_data[ASP_QUEUE_TYPE_PANICLOG].disk,
++		     ASP_PANICLOG_NUM_SECTORS << 3);
++
++	for (int i = ASP_QUEUE_TYPE_USERAREA; i < ASP_QUEUE_TYPE_COUNT; i++) {
++		/* TODO: sysfs attributes for serial number etc? */
++		ret = device_add_disk(asp->dev, asp->q_data[i].disk, NULL);
++		if (ret < 0)
++			goto out_cleanup_disk;
++
++		disk_added = i;
++	}
++
++	kfree(cmd);
++	return 0;
++out_cleanup_disk:
++	/* make sure only disks that were added are removed */
++	for (int i = ASP_QUEUE_TYPE_USERAREA; i <= disk_added; i++)
++		del_gendisk(asp->q_data[i].disk);
++out_free_disk:
++	for (int i = ASP_QUEUE_TYPE_USERAREA; i < ASP_QUEUE_TYPE_COUNT; i++) {
++		if (asp->q_data[i].disk)
++			put_disk(asp->q_data[i].disk);
++	}
++out_free_id_data:
++	kfree(identify);
++out_free_cmd:
++	kfree(cmd);
++out_free_admin_rq:
++	blk_mq_destroy_queue(asp->admin_rq);
++	blk_put_queue(asp->admin_rq);
++out_free_tag_set:
++	blk_mq_free_tag_set(&asp->tagset);
++out_destroy_mempool:
++	mempool_destroy(asp->iod_mempool);
++out_free_ida:
++	ida_free(&asp_instance_ida, asp->instance);
++	return ret;
++}
++
++static int apple_asp_setup_firmware(struct apple_asp *asp)
++{
++	struct device_node *mem_node;
++	u64 fw_base;
++	u64 fw_size;
++	int idx;
++
++	idx = of_property_match_string(asp->dev->of_node,
++				       "memory-region-names", "firmware");
++
++	mem_node = of_parse_phandle(asp->dev->of_node, "memory-region", idx);
++	if (!mem_node)
++		return dev_err_probe(asp->dev, -ENODEV,
++				     "No memory-region found for firmware\n");
++
++	if (of_property_read_reg(mem_node, 0, &fw_base, &fw_size))
++		return dev_err_probe(asp->dev, -ENODEV,
++				     "Could not read memory-region reg\n");
++
++	dev_dbg(asp->dev, "fw_base: 0x%llx, fw_size: 0x%llx\n", fw_base, fw_size);
++
++	/* make firmware available to ASP */
++	writel(fw_base & 0xffffffff,
++	       asp->akf_base + AKF_V1_REMAP_AP_LO);
++	writel(fw_base >> 32, asp->akf_base + AKF_V1_REMAP_AP_HI);
++	writel(0, asp->akf_base + AKF_V1_REMAP_IOP_LO);
++	writel(0, asp->akf_base + AKF_V1_REMAP_IOP_HI);
++	writel(fw_size & 0xffffffff,
++	       asp->akf_base + AKF_V1_REMAP_SZ_LO);
++	writel(fw_size >> 32, asp->akf_base + AKF_V1_REMAP_SZ_HI);
++	writel(AKF_V1_LITTLE_ENDIAN,
++	       asp->akf_base + AKF_V1_ENDIANNESS);
++
++	/* start ASP */
++	writel(AKF_V1_CPU_CONTROL_START,
++	       asp->akf_base + AKF_V1_CPU_CONTROL);
++
++	return 0;
++}
++
++static void apple_asp_rtkit_crashed(void *cookie, const void *crashlog,
++				    size_t crashlog_size)
++{
++	struct apple_asp *asp = cookie;
++
++        dev_err(asp->dev, "RTKit crashed; unable to recover without a reboot");
++	// TODO cleanup and remove disk
++}
++
++// TODO NAND information exposed via sysfs
++
++static void apple_asp_setup_queue(struct apple_asp *asp)
++{
++	u64 rtk_msg;
++
++	dev_dbg(asp->dev, "Initializing command buffer");
++
++	asp->q = dma_alloc_coherent(asp->dev, ASP_QUEUE_SIZE, &asp->q_iova,
++				    GFP_KERNEL);
++
++	if (!asp->q) {
++		asp->init_ret = -ENOMEM;
++		complete(&asp->init_done);
++		return;
++	}
++
++	rtk_msg = FIELD_PREP(ASP_SET_CMDBUF_BASE, asp->q_iova)
++		  | FIELD_PREP(ASP_SET_CMDBUF_SIZE_17_6, ASP_QUEUE_SIZE >> 6)
++		  | FIELD_PREP(ASP_MSG_TYPE, ASP_MSG_TYPE_SET_CMDBUF);
++
++	asp->init_ret = apple_rtkit_send_message(asp->rtk, asp->ep, rtk_msg,
++						 NULL, false);
++	return;
++}
++
++static void apple_asp_setup_tags(struct apple_asp *asp)
++{
++	u64 rtk_msg;
++
++	for (u8 i = 0; i < ASP_NUM_TAGS; i++) {
++		rtk_msg = FIELD_PREP(ASP_SET_TAG_CMDBUF_TAG, i)
++			  | FIELD_PREP(ASP_SET_TAG_CMDBUF_SIZE_17_6,
++				       ASP_TAG_SIZE >> 6)
++			  | FIELD_PREP(ASP_SET_TAG_CMDBUF_OFF_17_6,
++				       (ASP_TAG_SIZE * i) >> 6)
++			  | FIELD_PREP(ASP_MSG_TYPE, ASP_MSG_TYPE_SET_TAG_OFF);
++
++		asp->init_ret = apple_rtkit_send_message(asp->rtk, asp->ep,
++							 rtk_msg, NULL, false);
++		if (asp->init_ret < 0) {
++			complete(&asp->init_done);
++			return;
++		}
++	}
++	complete(&asp->init_done);
++}
++
++static void apple_asp_handle_cq(struct apple_asp *asp, u8 tag, u8 status)
++{
++	struct request *rq;
++	struct asp_iod *iod;
++
++	rq = blk_mq_tag_to_rq(asp->tagset.tags[0], tag);
++	if (unlikely(!rq)) {
++		dev_warn(asp->dev, "invalid tag %d completed with status %d",
++			 tag, status);
++		return;
++	}
++
++	dma_rmb();
++
++	iod = blk_mq_rq_to_pdu(rq);
++	iod->status = status;
++
++	if (iod->buffer) {
++		void *cmdd = asp_q_cmd_data(asp, &iod->cmd);
++		memcpy(iod->buffer, cmdd, iod->buf_len);
++	}
++
++	blk_mq_complete_request(rq);
++}
++
++static void apple_asp_rtkit_recv(void *cookie, u8 endpoint, u64 message)
++{
++	struct apple_asp *asp = cookie;
++
++	if (endpoint != asp->ep) {
++		dev_warn(asp->dev, "Message to unknown endpoint %d", endpoint);
++		return;
++	}
++
++	if (asp->init_ret < 0)
++		return;
++
++	u8 type = FIELD_GET(ASP_MSG_TYPE, message);
++
++	/* noise */
++	if (type == ASP_MSG_TYPE_UNK4)
++		return;
++
++	if (type != ASP_MSG_TYPE_COMPLETE) {
++		dev_warn(asp->dev, "Unhandled ASP message type %d", type);
++		return;
++	}
++
++	u8 tag = FIELD_GET(ASP_COMPLETION_TAG, message);
++	u8 status = FIELD_GET(ASP_COMPLETION_STATUS, message);
++
++	if (tag == ASP_COMPLETION_TAG_READY
++	    || tag == ASP_COMPLETION_TAG_CMDBUF_OK) {
++
++		if (status != ASP_COMPLETION_STATUS_INIT) {
++			dev_err(asp->dev,
++				"Unexpected init message status: %d", status);
++			asp->init_ret = -EIO;
++			return;
++		}
++
++		if (tag == ASP_COMPLETION_TAG_READY)
++			return apple_asp_setup_queue(asp);
++		else if (tag == ASP_COMPLETION_TAG_CMDBUF_OK)
++			return apple_asp_setup_tags(asp);
++	}
++
++
++	if (tag >= ASP_NUM_TAGS) {
++		dev_warn(asp->dev, "ASP tag %d out of bounds\n", tag);
++		return;
++	}
++
++	apple_asp_handle_cq(asp, tag, status);
++}
++
++static void apple_asp_rtkit_epmap_done(void *cookie)
++{
++	struct apple_asp *asp = cookie;
++	int ret;
++	u16 major_ver, minor_ver;
++
++	apple_rtkit_protocol_version(asp->rtk, &major_ver, &minor_ver);
++
++	if (major_ver == 10 && minor_ver < 2)
++		asp->ep = 0x5;
++	else if (major_ver == 10)
++		asp->ep = 0x6;
++	else
++		asp->ep = 0x20;
++
++	if (!asp->ep) {
++		dev_err(asp->dev, "Could not determine ASP endpoint");
++		return;
++	}
++
++	dev_dbg(asp->dev, "ASP endpoint is %d", asp->ep);
++
++	ret = apple_rtkit_start_ep(asp->rtk, asp->ep);
++	if (ret < 0) {
++		dev_err(asp->dev, "Could not start ASP endpoint: %d", ret);
++		return;
++	}
++}
++
++static const struct apple_rtkit_ops apple_asp_rtkit_ops = {
++	.crashed = apple_asp_rtkit_crashed,
++	.recv_message = apple_asp_rtkit_recv,
++	.epmap_done = apple_asp_rtkit_epmap_done,
++};
++
++static int apple_asp_probe(struct platform_device *pdev)
++{
++	struct apple_asp *asp;
++        struct device *dev = &pdev->dev;
++	struct resource *res;
++	int ret;
++
++	asp = devm_kzalloc(dev, sizeof(*asp), GFP_KERNEL);
++	if (!asp)
++		return -ENOMEM;
++
++	asp->akf_base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
++	if (IS_ERR(asp->akf_base))
++		return PTR_ERR(asp->akf_base);
++
++	asp->dev = dev;
++
++	/* limit of ARMv7 long descriptor format */
++	if (dma_set_mask_and_coherent(dev, DMA_BIT_MASK(40)))
++		return -ENXIO;
++
++	ret = apple_asp_setup_firmware(asp);
++	if (ret < 0)
++		return ret;
++
++ 	asp->rtk = devm_apple_rtkit_init(dev, asp, NULL, 0, &apple_asp_rtkit_ops);
++	if (IS_ERR(asp->rtk)) {
++		ret = dev_err_probe(dev, PTR_ERR(asp->rtk),
++				    "Failed to initialize RTKit");
++		goto out_stop_iop;
++	}
++
++	init_completion(&asp->init_done);
++
++	ret = apple_rtkit_wake(asp->rtk);
++	if (ret) {
++		ret = dev_err_probe(dev, ret, "Failed to wake ASP");
++		goto out_stop_iop;
++	}
++
++	/* error already printed in apple_asp_rtkit_epmap_done() */
++	if (!asp->ep) {
++		ret = -ENXIO;
++		goto out_rtkit;
++	}
++
++	if (!wait_for_completion_timeout(&asp->init_done,
++					msecs_to_jiffies(ASP_TIMEOUT_MS))) {
++		ret = dev_err_probe(dev, -ETIMEDOUT, "ASP Init timeout");
++		goto out_rtkit;
++	}
++
++	if (asp->init_ret < 0) {
++		ret = dev_err_probe(dev, asp->init_ret, "ASP Init Error");
++		goto out_rtkit;
++	}
++
++	platform_set_drvdata(pdev, asp);
++
++	dev_dbg(dev, "ASP is alive!");
++
++	ret = apple_asp_start_disk(asp);
++	if (ret < 0)
++		goto out_rtkit;
++
++	return 0;
++
++out_rtkit:
++	apple_rtkit_shutdown(asp->rtk);
++out_stop_iop:
++	writel(0, asp->akf_base + AKF_V1_CPU_CONTROL_START);
++
++	return ret;
++}
++
++static void apple_asp_remove(struct platform_device *pdev)
++{
++	dev_notice(&pdev->dev, "Removing ASP");
++
++	struct apple_asp *asp = platform_get_drvdata(pdev);
++
++	for (int i = ASP_QUEUE_TYPE_USERAREA; i < ASP_QUEUE_TYPE_COUNT; i++) {
++		del_gendisk(asp->q_data[i].disk);
++		put_disk(asp->q_data[i].disk);
++	}
++
++	blk_mq_destroy_queue(asp->admin_rq);
++	blk_put_queue(asp->admin_rq);
++	blk_mq_free_tag_set(&asp->tagset);
++
++	if (apple_rtkit_is_running(asp->rtk))
++		 apple_rtkit_shutdown(asp->rtk);
++
++	mempool_destroy(asp->iod_mempool);
++	ida_free(&asp_instance_ida, asp->instance);
++
++	dma_free_coherent(asp->dev, ASP_QUEUE_SIZE, asp->q, asp->q_iova);
++
++	writel(0, asp->akf_base + AKF_V1_CPU_CONTROL_START);
++}
++
++
++static const struct of_device_id apple_asp_of_match[] = {
++	{ .compatible = "apple,s5l8960x-ans" },
++	{}
++};
++MODULE_DEVICE_TABLE(of, apple_asp_of_match);
++
++static struct platform_driver apple_asp_driver = {
++	.driver = {
++		.name = "apple-asp",
++		.of_match_table = apple_asp_of_match,
++	},
++	.probe = apple_asp_probe,
++	.remove = apple_asp_remove,
++	.shutdown = apple_asp_remove,
++};
++
++module_platform_driver(apple_asp_driver);
++
++MODULE_LICENSE("Dual MIT/GPL");
++MODULE_DESCRIPTION("Apple ANS1 Storage Processor Driver");
++MODULE_AUTHOR("Nick Chan <towinchenmi@gmail.com>");
+diff --git a/drivers/mfd/macsmc.c b/drivers/mfd/macsmc.c
+index 08f7b6c8e..0419fe095 100644
+--- a/drivers/mfd/macsmc.c
++++ b/drivers/mfd/macsmc.c
+@@ -21,8 +21,6 @@
+ #include <linux/soc/apple/rtkit.h>
+ #include <linux/unaligned.h>
+ 
+-#define SMC_APP_ENDPOINT		0
+-
+ /* We don't actually know the true size here but this seem reasonable */
+ #define SMC_SHMEM_SIZE			0x1000
+ #define SMC_MAX_SIZE			255
+@@ -426,6 +424,7 @@ static int apple_smc_probe(struct platform_device *pdev)
+ 	u32 dev_cnt;
+ 	const struct mfd_cell *devs;
+ 	int ret;
++	u16 rtk_ver;
+ 	uintptr_t type;
+ 
+ 	type = (uintptr_t)of_device_get_match_data(dev);
+@@ -467,14 +466,17 @@ static int apple_smc_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "Failed to wake up SMC");
+ 
+-	smc->ep = apple_rtkit_app_ep_to_ep(smc->rtk, SMC_APP_ENDPOINT);
+-	if (!smc->ep)
+-		return dev_err_probe(dev, ret, "Failed to get SMC endpoint");
+-
+ 	ret = devm_add_action_or_reset(dev, apple_smc_rtkit_shutdown, smc);
+ 	if (ret)
+ 		return ret;
+ 
++	apple_rtkit_protocol_version(smc->rtk, &rtk_ver, NULL);
++
++	if (rtk_ver < 11)
++		smc->ep = 0x6;
++	else
++		smc->ep = 0x20;
++
+ 	ret = apple_rtkit_start_ep(smc->rtk, smc->ep);
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "Failed to start SMC endpoint");
+diff --git a/drivers/soc/apple/mailbox.c b/drivers/soc/apple/mailbox.c
+index 5c4845518..2e3a30394 100644
+--- a/drivers/soc/apple/mailbox.c
++++ b/drivers/soc/apple/mailbox.c
+@@ -32,6 +32,30 @@
+ #include <linux/types.h>
+ #include "mailbox.h"
+ 
++#define APPLE_AKF_MBOX_IRQ_MASK		0x0
++#define APPLE_AKF_MBOX_IRQ_ENABLE	0x4
++
++#define APPLE_AKF_MBOX_IRQ_A2I_EMPTY BIT(0)
++#define APPLE_AKF_MBOX_IRQ_A2I_NOT_EMPTY BIT(4)
++#define APPLE_AKF_MBOX_IRQ_I2A_EMPTY BIT(8)
++#define APPLE_AKF_MBOX_IRQ_I2A_NOT_EMPTY BIT(12)
++
++#define APPLE_AKF_MBOX_CONTROL_ENABLE	BIT(0)
++#define APPLE_AKF_MBOX_CONTROL_FULL	BIT(16)
++#define APPLE_AKF_MBOX_CONTROL_EMPTY	BIT(17)
++
++#define APPLE_AKF_MBOX_A2I_CONTROL	0x8
++#define APPLE_AKF_MBOX_A2I_SEND0	0x10
++#define APPLE_AKF_MBOX_A2I_SEND1	0x14
++#define APPLE_AKF_MBOX_A2I_RECV0	0x18
++#define APPLE_AKF_MBOX_A2I_RECV1	0x1c
++
++#define APPLE_AKF_MBOX_I2A_CONTROL	0x20
++#define APPLE_AKF_MBOX_I2A_SEND0	0x30
++#define APPLE_AKF_MBOX_I2A_SEND1	0x34
++#define APPLE_AKF_MBOX_I2A_RECV0	0x38
++#define APPLE_AKF_MBOX_I2A_RECV1	0x3c
++
+ #define APPLE_ASC_MBOX_CONTROL_FULL BIT(16)
+ #define APPLE_ASC_MBOX_CONTROL_EMPTY BIT(17)
+ 
+@@ -80,10 +104,18 @@
+ 
+ #define APPLE_MBOX_TX_TIMEOUT 500
+ 
++enum irq_control_type {
++	APPLE_MBOX_IRQ_CTL_NONE = 0,
++	APPLE_MBOX_IRQ_CTL_ACK,
++	APPLE_MBOX_IRQ_CTL_MASK,
++};
++
+ struct apple_mbox_hw {
+ 	unsigned int control_full;
+ 	unsigned int control_empty;
++	unsigned int control_enable;
+ 
++	bool is_96bit;
+ 	unsigned int a2i_control;
+ 	unsigned int a2i_send0;
+ 	unsigned int a2i_send1;
+@@ -92,7 +124,7 @@ struct apple_mbox_hw {
+ 	unsigned int i2a_recv0;
+ 	unsigned int i2a_recv1;
+ 
+-	bool has_irq_controls;
++	enum irq_control_type irq_control_type;
+ 	unsigned int irq_enable;
+ 	unsigned int irq_ack;
+ 	unsigned int irq_bit_recv_not_empty;
+@@ -133,10 +165,10 @@ int apple_mbox_send(struct apple_mbox *mbox, const struct apple_mbox_msg msg,
+ 		 * If the FIFO is already empty before the ack it will fire again
+ 		 * immediately after the ack.
+ 		 */
+-		if (mbox->hw->has_irq_controls) {
++		if (mbox->hw->irq_control_type == APPLE_MBOX_IRQ_CTL_ACK)
+ 			writel_relaxed(mbox->hw->irq_bit_send_empty,
+ 				       mbox->regs + mbox->hw->irq_ack);
+-		}
++
+ 		enable_irq(mbox->irq_send_empty);
+ 		reinit_completion(&mbox->tx_empty);
+ 		spin_unlock_irqrestore(&mbox->tx_lock, flags);
+@@ -154,8 +186,9 @@ int apple_mbox_send(struct apple_mbox *mbox, const struct apple_mbox_msg msg,
+ 	}
+ 
+ 	writeq_relaxed(msg.msg0, mbox->regs + mbox->hw->a2i_send0);
+-	writeq_relaxed(FIELD_PREP(APPLE_MBOX_MSG1_MSG, msg.msg1),
+-		       mbox->regs + mbox->hw->a2i_send1);
++	if (mbox->is_96bit)
++		writeq_relaxed(FIELD_PREP(APPLE_MBOX_MSG1_MSG, msg.msg1),
++			       mbox->regs + mbox->hw->a2i_send1);
+ 
+ 	spin_unlock_irqrestore(&mbox->tx_lock, flags);
+ 
+@@ -191,9 +224,10 @@ static int apple_mbox_poll_locked(struct apple_mbox *mbox)
+ 
+ 	while (!(mbox_ctrl & mbox->hw->control_empty)) {
+ 		msg.msg0 = readq_relaxed(mbox->regs + mbox->hw->i2a_recv0);
+-		msg.msg1 = FIELD_GET(
+-			APPLE_MBOX_MSG1_MSG,
+-			readq_relaxed(mbox->regs + mbox->hw->i2a_recv1));
++		if (mbox->is_96bit)
++			msg.msg1 = FIELD_GET(APPLE_MBOX_MSG1_MSG,
++				   readq_relaxed(mbox->regs +
++						 mbox->hw->i2a_recv1));
+ 
+ 		mbox->rx(mbox, msg, mbox->cookie);
+ 		ret++;
+@@ -208,10 +242,9 @@ static int apple_mbox_poll_locked(struct apple_mbox *mbox)
+ 	 * those two the interrupt will just fire again immediately after the
+ 	 * ack since it's level triggered.
+ 	 */
+-	if (mbox->hw->has_irq_controls) {
++	if (mbox->hw->irq_control_type == APPLE_MBOX_IRQ_CTL_ACK)
+ 		writel_relaxed(mbox->hw->irq_bit_recv_not_empty,
+ 			       mbox->regs + mbox->hw->irq_ack);
+-	}
+ 
+ 	return ret;
+ }
+@@ -259,11 +292,10 @@ int apple_mbox_start(struct apple_mbox *mbox)
+ 	 * the mailbox level so that both hardware revisions behave almost
+ 	 * the same.
+ 	 */
+-	if (mbox->hw->has_irq_controls) {
++	if (mbox->hw->irq_control_type)
+ 		writel_relaxed(mbox->hw->irq_bit_recv_not_empty |
+ 				       mbox->hw->irq_bit_send_empty,
+ 			       mbox->regs + mbox->hw->irq_enable);
+-	}
+ 
+ 	enable_irq(mbox->irq_recv_not_empty);
+ 	mbox->active = true;
+@@ -347,6 +379,8 @@ static int apple_mbox_probe(struct platform_device *pdev)
+ 	if (!mbox->hw)
+ 		return -EINVAL;
+ 
++	mbox->is_96bit = mbox->hw->is_96bit;
++
+ 	mbox->regs = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(mbox->regs))
+ 		return PTR_ERR(mbox->regs);
+@@ -389,6 +423,13 @@ static int apple_mbox_probe(struct platform_device *pdev)
+ 		return ret;
+ 
+ 	platform_set_drvdata(pdev, mbox);
++
++	if (mbox->hw->control_enable) {
++		writel(mbox->hw->control_enable, mbox->regs +
++		       mbox->hw->a2i_control);
++		writel(mbox->hw->control_enable, mbox->regs +
++		       mbox->hw->i2a_control);
++	}
+ 	return 0;
+ }
+ 
+@@ -396,6 +437,7 @@ static const struct apple_mbox_hw apple_mbox_t8015_hw = {
+ 	.control_full = APPLE_ASC_MBOX_CONTROL_FULL,
+ 	.control_empty = APPLE_ASC_MBOX_CONTROL_EMPTY,
+ 
++	.is_96bit = true,
+ 	.a2i_control = APPLE_T8015_MBOX_A2I_CONTROL,
+ 	.a2i_send0 = APPLE_ASC_MBOX_A2I_SEND0,
+ 	.a2i_send1 = APPLE_ASC_MBOX_A2I_SEND1,
+@@ -404,13 +446,32 @@ static const struct apple_mbox_hw apple_mbox_t8015_hw = {
+ 	.i2a_recv0 = APPLE_ASC_MBOX_I2A_RECV0,
+ 	.i2a_recv1 = APPLE_ASC_MBOX_I2A_RECV1,
+ 
+-	.has_irq_controls = false,
++	.irq_control_type = APPLE_MBOX_IRQ_CTL_NONE,
++};
++
++static const struct apple_mbox_hw apple_mbox_akf_hw = {
++	.control_full = APPLE_AKF_MBOX_CONTROL_FULL,
++	.control_empty = APPLE_AKF_MBOX_CONTROL_EMPTY,
++	.control_enable = APPLE_AKF_MBOX_CONTROL_ENABLE,
++
++	.is_96bit = false,
++	.a2i_control = APPLE_AKF_MBOX_A2I_CONTROL,
++	.a2i_send0 = APPLE_AKF_MBOX_A2I_SEND0,
++
++	.i2a_control = APPLE_AKF_MBOX_I2A_CONTROL,
++	.i2a_recv0 = APPLE_AKF_MBOX_I2A_RECV0,
++
++	.irq_control_type = APPLE_MBOX_IRQ_CTL_MASK,
++	.irq_enable = APPLE_AKF_MBOX_IRQ_ENABLE,
++	.irq_bit_recv_not_empty = APPLE_AKF_MBOX_IRQ_I2A_NOT_EMPTY,
++	.irq_bit_send_empty = APPLE_AKF_MBOX_IRQ_A2I_EMPTY,
+ };
+ 
+ static const struct apple_mbox_hw apple_mbox_asc_hw = {
+ 	.control_full = APPLE_ASC_MBOX_CONTROL_FULL,
+ 	.control_empty = APPLE_ASC_MBOX_CONTROL_EMPTY,
+ 
++	.is_96bit = true,
+ 	.a2i_control = APPLE_ASC_MBOX_A2I_CONTROL,
+ 	.a2i_send0 = APPLE_ASC_MBOX_A2I_SEND0,
+ 	.a2i_send1 = APPLE_ASC_MBOX_A2I_SEND1,
+@@ -419,13 +480,14 @@ static const struct apple_mbox_hw apple_mbox_asc_hw = {
+ 	.i2a_recv0 = APPLE_ASC_MBOX_I2A_RECV0,
+ 	.i2a_recv1 = APPLE_ASC_MBOX_I2A_RECV1,
+ 
+-	.has_irq_controls = false,
++	.irq_control_type = APPLE_MBOX_IRQ_CTL_NONE,
+ };
+ 
+ static const struct apple_mbox_hw apple_mbox_m3_hw = {
+ 	.control_full = APPLE_M3_MBOX_CONTROL_FULL,
+ 	.control_empty = APPLE_M3_MBOX_CONTROL_EMPTY,
+ 
++	.is_96bit = true,
+ 	.a2i_control = APPLE_M3_MBOX_A2I_CONTROL,
+ 	.a2i_send0 = APPLE_M3_MBOX_A2I_SEND0,
+ 	.a2i_send1 = APPLE_M3_MBOX_A2I_SEND1,
+@@ -434,7 +496,7 @@ static const struct apple_mbox_hw apple_mbox_m3_hw = {
+ 	.i2a_recv0 = APPLE_M3_MBOX_I2A_RECV0,
+ 	.i2a_recv1 = APPLE_M3_MBOX_I2A_RECV1,
+ 
+-	.has_irq_controls = true,
++	.irq_control_type = APPLE_MBOX_IRQ_CTL_ACK,
+ 	.irq_enable = APPLE_M3_MBOX_IRQ_ENABLE,
+ 	.irq_ack = APPLE_M3_MBOX_IRQ_ACK,
+ 	.irq_bit_recv_not_empty = APPLE_M3_MBOX_IRQ_I2A_NOT_EMPTY,
+@@ -444,6 +506,7 @@ static const struct apple_mbox_hw apple_mbox_m3_hw = {
+ static const struct of_device_id apple_mbox_of_match[] = {
+ 	{ .compatible = "apple,asc-mailbox-v4", .data = &apple_mbox_asc_hw },
+ 	{ .compatible = "apple,t8015-asc-mailbox", .data = &apple_mbox_t8015_hw },
++	{ .compatible = "apple,akf-mailbox-v1", .data = &apple_mbox_akf_hw },
+ 	{ .compatible = "apple,m3-mailbox-v2", .data = &apple_mbox_m3_hw },
+ 	{}
+ };
+diff --git a/drivers/soc/apple/mailbox.h b/drivers/soc/apple/mailbox.h
+index f73a8913d..1843122ec 100644
+--- a/drivers/soc/apple/mailbox.h
++++ b/drivers/soc/apple/mailbox.h
+@@ -22,6 +22,7 @@ struct apple_mbox {
+ 	void __iomem *regs;
+ 	const struct apple_mbox_hw *hw;
+ 	bool active;
++	bool is_96bit;
+ 
+ 	int irq_recv_not_empty;
+ 	int irq_send_empty;
+diff --git a/drivers/soc/apple/rtkit-crashlog.c b/drivers/soc/apple/rtkit-crashlog.c
+index 8319e3651..20b9d596f 100644
+--- a/drivers/soc/apple/rtkit-crashlog.c
++++ b/drivers/soc/apple/rtkit-crashlog.c
+@@ -13,7 +13,8 @@
+ #define APPLE_RTKIT_CRASHLOG_VERSION FOURCC('C', 'v', 'e', 'r')
+ #define APPLE_RTKIT_CRASHLOG_MBOX FOURCC('C', 'm', 'b', 'x')
+ #define APPLE_RTKIT_CRASHLOG_TIME FOURCC('C', 't', 'i', 'm')
+-#define APPLE_RTKIT_CRASHLOG_REGS FOURCC('C', 'r', 'g', '8')
++#define APPLE_RTKIT_CRASHLOG_ARMV7 FOURCC('C', 'r', 'g', 'A')
++#define APPLE_RTKIT_CRASHLOG_ARMV8 FOURCC('C', 'r', 'g', '8')
+ 
+ /* For COMPILE_TEST on non-ARM64 architectures */
+ #ifndef PSR_MODE_EL0t
+@@ -25,6 +26,21 @@
+ #define PSR_MODE_MASK	0x0000000f
+ #endif
+ 
++/*
++ * ARMv7 mode definitions: APPLE_RTKIT depends on APPLE_MAILBOX, which
++ * depends on 64BIT, so there is no need to care about COMPILE_TEST on ARM.
++ */
++#define USR_MODE        0x00000010
++#define FIQ_MODE        0x00000011
++#define IRQ_MODE        0x00000012
++#define SVC_MODE        0x00000013
++#define MON_MODE        0x00000016
++#define ABT_MODE        0x00000017
++#define HYP_MODE        0x0000001a
++#define UND_MODE        0x0000001b
++#define SYSTEM_MODE     0x0000001f
++#define MODE_MASK       0x0000001f
++
+ struct apple_rtkit_crashlog_header {
+ 	u32 fourcc;
+ 	u32 version;
+@@ -42,7 +58,7 @@ struct apple_rtkit_crashlog_mbox_entry {
+ };
+ static_assert(sizeof(struct apple_rtkit_crashlog_mbox_entry) == 0x18);
+ 
+-struct apple_rtkit_crashlog_regs {
++struct apple_rtkit_crashlog_armv8 {
+ 	u32 unk_0;
+ 	u32 unk_4;
+ 	u64 regs[31];
+@@ -58,7 +74,21 @@ struct apple_rtkit_crashlog_regs {
+ 	u64 esr;
+ 	u64 unk_Z;
+ } __packed;
+-static_assert(sizeof(struct apple_rtkit_crashlog_regs) == 0x350);
++static_assert(sizeof(struct apple_rtkit_crashlog_armv8) == 0x350);
++
++struct apple_rtkit_crashlog_armv7 {
++	u32 unk_0;
++	u32 unk_4;
++	u32 regs[16];
++	u32 psr;
++	u32 unk_x1;
++	u8 stack[0x100];
++	u32 unk_x2;
++	u32 unk_x3;
++	u32 unk_x4;
++	u32 unk_x5;
++} __packed;
++static_assert(sizeof(struct apple_rtkit_crashlog_armv7) == 0x160);
+ 
+ static void apple_rtkit_crashlog_dump_str(struct apple_rtkit *rtk, u8 *bfr,
+ 					  size_t size)
+@@ -123,21 +153,21 @@ static void apple_rtkit_crashlog_dump_mailbox(struct apple_rtkit *rtk, u8 *bfr,
+ 	}
+ }
+ 
+-static void apple_rtkit_crashlog_dump_regs(struct apple_rtkit *rtk, u8 *bfr,
+-					   size_t size)
++static void apple_rtkit_crashlog_dump_armv8(struct apple_rtkit *rtk, u8 *bfr,
++					    size_t size)
+ {
+-	struct apple_rtkit_crashlog_regs *regs;
++	struct apple_rtkit_crashlog_armv8 *state;
+ 	const char *el;
+ 	int i;
+ 
+-	if (size < sizeof(*regs)) {
+-		dev_warn(rtk->dev, "RTKit: Regs section too small: 0x%zx", size);
++	if (size < sizeof(*state)) {
++		dev_warn(rtk->dev, "RTKit: ARMv8 section too small: 0x%zx", size);
+ 		return;
+ 	}
+ 
+-	regs = (struct apple_rtkit_crashlog_regs *)bfr;
++	state = (struct apple_rtkit_crashlog_armv8 *)bfr;
+ 
+-	switch (regs->psr & PSR_MODE_MASK) {
++	switch (state->psr & PSR_MODE_MASK) {
+ 	case PSR_MODE_EL0t:
+ 		el = "EL0t";
+ 		break;
+@@ -160,11 +190,11 @@ static void apple_rtkit_crashlog_dump_regs(struct apple_rtkit *rtk, u8 *bfr,
+ 
+ 	dev_warn(rtk->dev, "RTKit: Exception dump:");
+ 	dev_warn(rtk->dev, "  == Exception taken from %s ==", el);
+-	dev_warn(rtk->dev, "  PSR    = 0x%llx", regs->psr);
+-	dev_warn(rtk->dev, "  PC     = 0x%llx\n", regs->pc);
+-	dev_warn(rtk->dev, "  ESR    = 0x%llx\n", regs->esr);
+-	dev_warn(rtk->dev, "  FAR    = 0x%llx\n", regs->far);
+-	dev_warn(rtk->dev, "  SP     = 0x%llx\n", regs->sp);
++	dev_warn(rtk->dev, "  PSR    = 0x%llx", state->psr);
++	dev_warn(rtk->dev, "  PC     = 0x%llx\n", state->pc);
++	dev_warn(rtk->dev, "  ESR    = 0x%llx\n", state->esr);
++	dev_warn(rtk->dev, "  FAR    = 0x%llx\n", state->far);
++	dev_warn(rtk->dev, "  SP     = 0x%llx\n", state->sp);
+ 	dev_warn(rtk->dev, "\n");
+ 
+ 	for (i = 0; i < 31; i += 4) {
+@@ -172,17 +202,79 @@ static void apple_rtkit_crashlog_dump_regs(struct apple_rtkit *rtk, u8 *bfr,
+ 			dev_warn(rtk->dev,
+ 					 "  x%02d-x%02d = %016llx %016llx %016llx %016llx\n",
+ 					 i, i + 3,
+-					 regs->regs[i], regs->regs[i + 1],
+-					 regs->regs[i + 2], regs->regs[i + 3]);
++					 state->regs[i], state->regs[i + 1],
++					 state->regs[i + 2], state->regs[i + 3]);
+ 		else
+ 			dev_warn(rtk->dev,
+ 					 "  x%02d-x%02d = %016llx %016llx %016llx\n", i, i + 3,
+-					 regs->regs[i], regs->regs[i + 1], regs->regs[i + 2]);
++					 state->regs[i], state->regs[i + 1], state->regs[i + 2]);
+ 	}
+ 
+ 	dev_warn(rtk->dev, "\n");
+ }
+ 
++static void apple_rtkit_crashlog_dump_armv7(struct apple_rtkit *rtk, u8 *bfr,
++					    size_t size)
++{
++	struct apple_rtkit_crashlog_armv7 *state;
++	const char *mode;
++	int i;
++
++	if (size < sizeof(*state)) {
++		dev_warn(rtk->dev, "RTKit: ARMv7 section too small: 0x%zx", size);
++		return;
++	}
++
++	state = (struct apple_rtkit_crashlog_armv7 *)bfr;
++
++	switch (state->psr & MODE_MASK) {
++	case USR_MODE:
++		mode = "User";
++		break;
++	case FIQ_MODE:
++		mode = "FIQ";
++		break;
++	case IRQ_MODE:
++		mode = "IRQ";
++		break;
++	case SVC_MODE:
++		mode = "Supervisor";
++		break;
++	case MON_MODE:
++		mode = "Monitor";
++		break;
++	case ABT_MODE:
++		mode = "Abort";
++		break;
++	case HYP_MODE:
++		mode = "Hypervisor";
++		break;
++	case UND_MODE:
++		mode = "Undefined";
++		break;
++	case SYSTEM_MODE:
++		mode = "System";
++		break;
++	default:
++		mode = "Unknown";
++		break;
++	}
++
++	dev_warn(rtk->dev, "RTKit: Exception dump:");
++	dev_warn(rtk->dev, "  == Exception taken from %s mode ==", mode);
++	dev_warn(rtk->dev, "  PSR    = 0x%x", state->psr);
++	dev_warn(rtk->dev, "\n");
++
++	for (i = 0; i < 16; i += 4)
++		dev_warn(rtk->dev,
++				 "  r%02d-r%02d = %08x %08x %08x %08x\n",
++				 i, i + 3,
++				 state->regs[i], state->regs[i + 1],
++				 state->regs[i + 2], state->regs[i + 3]);
++
++	dev_warn(rtk->dev, "\n");
++}
++
+ void apple_rtkit_crashlog_dump(struct apple_rtkit *rtk, u8 *bfr, size_t size)
+ {
+ 	size_t offset;
+@@ -229,8 +321,12 @@ void apple_rtkit_crashlog_dump(struct apple_rtkit *rtk, u8 *bfr, size_t size)
+ 			apple_rtkit_crashlog_dump_time(rtk, bfr + offset + 16,
+ 						       section_size);
+ 			break;
+-		case APPLE_RTKIT_CRASHLOG_REGS:
+-			apple_rtkit_crashlog_dump_regs(rtk, bfr + offset + 16,
++		case APPLE_RTKIT_CRASHLOG_ARMV7:
++			apple_rtkit_crashlog_dump_armv7(rtk, bfr + offset + 16,
++						       section_size);
++			break;
++		case APPLE_RTKIT_CRASHLOG_ARMV8:
++			apple_rtkit_crashlog_dump_armv8(rtk, bfr + offset + 16,
+ 						       section_size);
+ 			break;
+ 		default:
+diff --git a/drivers/soc/apple/rtkit-internal.h b/drivers/soc/apple/rtkit-internal.h
+index 5f91dea8b..d92682bae 100644
+--- a/drivers/soc/apple/rtkit-internal.h
++++ b/drivers/soc/apple/rtkit-internal.h
+@@ -19,7 +19,8 @@
+ #include <linux/workqueue.h>
+ #include "mailbox.h"
+ 
+-#define APPLE_RTKIT_APP_ENDPOINT_START_V10 0x6
++#define APPLE_RTKIT_APP_ENDPOINT_START_V10_0 0x5
++#define APPLE_RTKIT_APP_ENDPOINT_START_V10_2 0x6
+ #define APPLE_RTKIT_APP_ENDPOINT_START_V11 0x20
+ #define APPLE_RTKIT_MAX_ENDPOINTS 0x100
+ 
+@@ -35,7 +36,8 @@ struct apple_rtkit {
+ 	struct completion ap_pwr_ack_completion;
+ 
+ 	int boot_result;
+-	int version;
++	u16 major_ver;
++	u16 minor_ver;
+ 	u8 app_ep_start;
+ 
+ 	unsigned int iop_power_state;
+diff --git a/drivers/soc/apple/rtkit.c b/drivers/soc/apple/rtkit.c
+index a6bce181d..aa67760de 100644
+--- a/drivers/soc/apple/rtkit.c
++++ b/drivers/soc/apple/rtkit.c
+@@ -24,7 +24,7 @@ enum {
+ 	APPLE_RTKIT_EP_OSLOG = 8,
+ };
+ 
+-#define APPLE_RTKIT_MGMT_TYPE GENMASK_ULL(59, 52)
++#define APPLE_RTKIT_MGMT_TYPE GENMASK_ULL(55, 52)
+ 
+ enum {
+ 	APPLE_RTKIT_MGMT_HELLO = 1,
+@@ -58,7 +58,7 @@ enum {
+ #define APPLE_RTKIT_BUFFER_REQUEST_SIZE GENMASK_ULL(51, 44)
+ #define APPLE_RTKIT_BUFFER_REQUEST_IOVA GENMASK_ULL(43, 0)
+ 
+-#define APPLE_RTKIT_SYSLOG_TYPE GENMASK_ULL(59, 52)
++#define APPLE_RTKIT_SYSLOG_TYPE GENMASK_ULL(55, 52)
+ 
+ #define APPLE_RTKIT_SYSLOG_LOG 5
+ 
+@@ -74,6 +74,9 @@ enum {
+ #define APPLE_RTKIT_MIN_SUPPORTED_VERSION 10
+ #define APPLE_RTKIT_MAX_SUPPORTED_VERSION 12
+ 
++#define APPLE_RTKIT_64BIT_MSG_EP	GENMASK_ULL(63, 56)
++#define APPLE_RTKIT_64BIT_MSG_MSG	GENMASK_ULL(55, 0)
++
+ struct apple_rtkit_rx_work {
+ 	struct apple_rtkit *rtk;
+ 	u8 ep;
+@@ -118,9 +121,15 @@ static void apple_rtkit_management_rx_hello(struct apple_rtkit *rtk, u64 msg)
+ {
+ 	u64 reply;
+ 
+-	int min_ver = FIELD_GET(APPLE_RTKIT_MGMT_HELLO_MINVER, msg);
+-	int max_ver = FIELD_GET(APPLE_RTKIT_MGMT_HELLO_MAXVER, msg);
+-	int want_ver = min(APPLE_RTKIT_MAX_SUPPORTED_VERSION, max_ver);
++	u16 min_ver = FIELD_GET(APPLE_RTKIT_MGMT_HELLO_MINVER, msg);
++	u16 max_ver = FIELD_GET(APPLE_RTKIT_MGMT_HELLO_MAXVER, msg);
++	u16 want_ver = min(APPLE_RTKIT_MAX_SUPPORTED_VERSION, max_ver);
++
++	/* min_ver is minor instead of minimum if major version is 10 */
++	if (max_ver == 10) {
++		rtk->minor_ver = min_ver;
++		min_ver = max_ver;
++	}
+ 
+ 	dev_dbg(rtk->dev, "RTKit: Min ver %d, max ver %d\n", min_ver, max_ver);
+ 
+@@ -136,17 +145,24 @@ static void apple_rtkit_management_rx_hello(struct apple_rtkit *rtk, u64 msg)
+ 		goto abort_boot;
+ 	}
+ 
+-	dev_info(rtk->dev, "RTKit: Initializing (protocol version %d)\n",
+-		 want_ver);
+-	rtk->version = want_ver;
++	rtk->major_ver = want_ver;
++	dev_info(rtk->dev, "RTKit: Initializing (protocol version %d.%d)\n",
++		 rtk->major_ver, rtk->minor_ver);
+ 
+-	if (rtk->version < 11)
+-		rtk->app_ep_start = APPLE_RTKIT_APP_ENDPOINT_START_V10;
+-	else
++	if (rtk->major_ver == 10 && rtk->minor_ver < 2)
++		rtk->app_ep_start = APPLE_RTKIT_APP_ENDPOINT_START_V10_0;
++	else if (rtk->major_ver == 10)
++		rtk->app_ep_start = APPLE_RTKIT_APP_ENDPOINT_START_V10_2;
++	else if (rtk->major_ver > 10)
+ 		rtk->app_ep_start = APPLE_RTKIT_APP_ENDPOINT_START_V11;
+ 
+-	reply = FIELD_PREP(APPLE_RTKIT_MGMT_HELLO_MINVER, want_ver);
++	if (rtk->major_ver > 10)
++		reply = FIELD_PREP(APPLE_RTKIT_MGMT_HELLO_MINVER, want_ver);
++	else
++		reply = FIELD_PREP(APPLE_RTKIT_MGMT_HELLO_MINVER, rtk->minor_ver);
++
+ 	reply |= FIELD_PREP(APPLE_RTKIT_MGMT_HELLO_MAXVER, want_ver);
++
+ 	apple_rtkit_management_send(rtk, APPLE_RTKIT_MGMT_HELLO_REPLY, reply);
+ 
+ 	return;
+@@ -174,7 +190,7 @@ static void apple_rtkit_management_rx_epmap(struct apple_rtkit *rtk, u64 msg)
+ 	}
+ 
+ 	reply = FIELD_PREP(APPLE_RTKIT_MGMT_EPMAP_BASE, base);
+-	if (rtk->version > 10) {
++	if (rtk->major_ver > 10) {
+ 		if (msg & APPLE_RTKIT_MGMT_EPMAP_LAST)
+ 			reply |= APPLE_RTKIT_MGMT_EPMAP_LAST;
+ 		else
+@@ -183,7 +199,7 @@ static void apple_rtkit_management_rx_epmap(struct apple_rtkit *rtk, u64 msg)
+ 
+ 	apple_rtkit_management_send(rtk, APPLE_RTKIT_MGMT_EPMAP_REPLY, reply);
+ 
+-	if (rtk->version > 10 && !(msg & APPLE_RTKIT_MGMT_EPMAP_LAST))
++	if (rtk->major_ver > 10 && !(msg & APPLE_RTKIT_MGMT_EPMAP_LAST))
+ 		return;
+ 
+ 	for_each_set_bit(ep, rtk->endpoints, rtk->app_ep_start) {
+@@ -212,6 +228,9 @@ static void apple_rtkit_management_rx_epmap(struct apple_rtkit *rtk, u64 msg)
+ 
+ 	rtk->boot_result = 0;
+ 	complete_all(&rtk->epmap_completion);
++
++	if (rtk->ops->epmap_done)
++		rtk->ops->epmap_done(rtk->cookie);
+ }
+ 
+ static void apple_rtkit_management_rx_iop_pwr_ack(struct apple_rtkit *rtk,
+@@ -579,7 +598,16 @@ static void apple_rtkit_rx(struct apple_mbox *mbox, struct apple_mbox_msg msg,
+ {
+ 	struct apple_rtkit *rtk = cookie;
+ 	struct apple_rtkit_rx_work *work;
+-	u8 ep = msg.msg1;
++	u64 rtk_msg;
++	u8 ep;
++
++	if (mbox->is_96bit) {
++		rtk_msg = msg.msg0;
++		ep = msg.msg1;
++	} else {
++		rtk_msg = FIELD_GET(APPLE_RTKIT_64BIT_MSG_MSG, msg.msg0);
++		ep = FIELD_GET(APPLE_RTKIT_64BIT_MSG_EP, msg.msg0);
++	};
+ 
+ 	/*
+ 	 * The message was read from a MMIO FIFO and we have to make
+@@ -595,7 +623,7 @@ static void apple_rtkit_rx(struct apple_mbox *mbox, struct apple_mbox_msg msg,
+ 
+ 	if (ep >= rtk->app_ep_start &&
+ 	    rtk->ops->recv_message_early &&
+-	    rtk->ops->recv_message_early(rtk->cookie, ep, msg.msg0))
++	    rtk->ops->recv_message_early(rtk->cookie, ep, rtk_msg))
+ 		return;
+ 
+ 	work = kzalloc_obj(*work, GFP_ATOMIC);
+@@ -604,7 +632,7 @@ static void apple_rtkit_rx(struct apple_mbox *mbox, struct apple_mbox_msg msg,
+ 
+ 	work->rtk = rtk;
+ 	work->ep = ep;
+-	work->msg = msg.msg0;
++	work->msg = rtk_msg;
+ 	INIT_WORK(&work->work, apple_rtkit_rx_work);
+ 	queue_work(rtk->wq, &work->work);
+ }
+@@ -612,10 +640,15 @@ static void apple_rtkit_rx(struct apple_mbox *mbox, struct apple_mbox_msg msg,
+ int apple_rtkit_send_message(struct apple_rtkit *rtk, u8 ep, u64 message,
+ 			     struct completion *completion, bool atomic)
+ {
+-	struct apple_mbox_msg msg = {
+-		.msg0 = message,
+-		.msg1 = ep,
+-	};
++	struct apple_mbox_msg msg;
++
++	if (rtk->mbox->is_96bit) {
++		msg.msg0 = message;
++		msg.msg1 = ep;
++	} else {
++		msg.msg0 = FIELD_PREP(APPLE_RTKIT_64BIT_MSG_EP, ep)
++			 | FIELD_PREP(APPLE_RTKIT_64BIT_MSG_MSG, message);
++	}
+ 
+ 	if (rtk->crashed) {
+ 		dev_warn(rtk->dev,
+@@ -623,7 +656,8 @@ int apple_rtkit_send_message(struct apple_rtkit *rtk, u8 ep, u64 message,
+ 		return -EINVAL;
+ 	}
+ 
+-	if (ep >= rtk->app_ep_start && !apple_rtkit_is_running(rtk)) {
++	if (ep >= rtk->app_ep_start && !rtk->ops->epmap_done &&
++	    !apple_rtkit_is_running(rtk)) {
+ 		dev_warn(rtk->dev,
+ 			 "RTKit: Endpoint 0x%02x is not running, cannot send message\n", ep);
+ 		return -EINVAL;
+@@ -652,7 +686,7 @@ int apple_rtkit_start_ep(struct apple_rtkit *rtk, u8 endpoint)
+ 
+ 	if (!test_bit(endpoint, rtk->endpoints))
+ 		return -EINVAL;
+-	if (endpoint >= rtk->app_ep_start &&
++	if (endpoint >= rtk->app_ep_start && !rtk->ops->epmap_done &&
+ 	    !apple_rtkit_is_running(rtk))
+ 		return -EINVAL;
+ 
+@@ -683,9 +717,12 @@ struct apple_rtkit *apple_rtkit_init(struct device *dev, void *cookie,
+ 	rtk->ops = ops;
+ 
+ 	/*
+-	 * The management endpoint is required to receive the HELLO message
++	 * The management endpoint (0) is required to receive the HELLO message
+ 	 * and infer the start of app endpoints so assume it is a system
+-	 * endpoint here and update this value when HELLO is received.
++	 * endpoint.
++	 *
++	 * All other endpoints starting at APPLE_RTKIT_EP_CRASHLOG (1) is
++	 * assumed to be an app endpoint until HELLO is received.
+ 	 */
+ 	rtk->app_ep_start = APPLE_RTKIT_EP_CRASHLOG;
+ 
+@@ -744,6 +781,15 @@ static int apple_rtkit_wait_for_completion(struct completion *c)
+ 		return 0;
+ }
+ 
++void apple_rtkit_protocol_version(struct apple_rtkit *rtk, u16 *major_ver,
++				  u16 *minor_ver)
++{
++	*major_ver = rtk->major_ver;
++	if (minor_ver)
++		*minor_ver = rtk->minor_ver;
++}
++EXPORT_SYMBOL_GPL(apple_rtkit_protocol_version);
++
+ int apple_rtkit_reinit(struct apple_rtkit *rtk)
+ {
+ 	/* make sure we don't handle any messages while reinitializing */
+@@ -790,10 +836,25 @@ static int apple_rtkit_set_ap_power_state(struct apple_rtkit *rtk,
+ 	if (ret)
+ 		return ret;
+ 
++	/*
++	 * protocol version 10.0 does not ack AP going into state 0x20
++	 * side effect such as syslog enablement is still honored.
++	 */
++	if (rtk->major_ver == 10 && rtk->minor_ver < 2
++	    && state == APPLE_RTKIT_PWR_STATE_ON) {
++		rtk->ap_power_state = APPLE_RTKIT_PWR_STATE_ON;
++		return 0;
++	}
++
+ 	ret = apple_rtkit_wait_for_completion(&rtk->ap_pwr_ack_completion);
+ 	if (ret)
+ 		return ret;
+ 
++	if (rtk->major_ver == 10 && rtk->minor_ver < 2
++	    && state == APPLE_RTKIT_PWR_STATE_QUIESCED
++	    && rtk->ap_power_state == APPLE_RTKIT_PWR_STATE_OFF)
++		rtk->ap_power_state = APPLE_RTKIT_PWR_STATE_QUIESCED;
++
+ 	if (rtk->ap_power_state != state)
+ 		return -EINVAL;
+ 	return 0;
+@@ -881,15 +942,6 @@ int apple_rtkit_poweroff(struct apple_rtkit *rtk)
+ }
+ EXPORT_SYMBOL_GPL(apple_rtkit_poweroff);
+ 
+-u8 apple_rtkit_app_ep_to_ep(struct apple_rtkit *rtk, u8 app_ep)
+-{
+-	if (!apple_rtkit_is_running(rtk))
+-		return 0;
+-
+-	return rtk->app_ep_start + app_ep;
+-}
+-EXPORT_SYMBOL_GPL(apple_rtkit_app_ep_to_ep);
+-
+ int apple_rtkit_idle(struct apple_rtkit *rtk)
+ {
+ 	int ret;
+diff --git a/include/linux/mfd/macsmc.h b/include/linux/mfd/macsmc.h
+index 1a462baae..b92397bc9 100644
+--- a/include/linux/mfd/macsmc.h
++++ b/include/linux/mfd/macsmc.h
+@@ -83,6 +83,7 @@ enum apple_smc_boot_stage {
+ /**
+  * struct apple_smc
+  * @dev: Underlying device struct for the physical backend device
++ * @ep: SMC RTKit endpoint
+  * @key_count: Number of available SMC keys
+  * @first_key: First valid SMC key
+  * @last_key: Last valid SMC key
+@@ -93,7 +94,6 @@ enum apple_smc_boot_stage {
+  * @sram: Pointer to SRAM resource
+  * @sram_base: SRAM base address
+  * @shmem: RTKit shared memory structure for SRAM
+- * @ep: SMC endpoint number
+  * @msg_id: Current message id for commands, will be incremented for each command
+  * @atomic_mode: Flag set when atomic mode is entered
+  * @atomic_pending: Flag indicating pending atomic command
+@@ -105,6 +105,7 @@ enum apple_smc_boot_stage {
+ struct apple_smc {
+ 	struct device *dev;
+ 
++	u8 ep;
+ 	u32 key_count;
+ 	smc_key first_key;
+ 	smc_key last_key;
+@@ -119,7 +120,6 @@ struct apple_smc {
+ 	struct resource *sram;
+ 	void __iomem *sram_base;
+ 	struct apple_rtkit_shmem shmem;
+-	u8 ep;
+ 
+ 	unsigned int msg_id;
+ 
+diff --git a/include/linux/soc/apple/rtkit.h b/include/linux/soc/apple/rtkit.h
+index dde8abe99..b4b2fb4ba 100644
+--- a/include/linux/soc/apple/rtkit.h
++++ b/include/linux/soc/apple/rtkit.h
+@@ -39,6 +39,11 @@ struct apple_rtkit_shmem {
+  *
+  * @crashed:       Called when the co-processor has crashed. Runs in process
+  *                 context.
++ * @epmap_done:    Called when epmap is completed. Useful if the IOP requires
++ *                 app endpoints to be started in order to reach power-on state.
++ *                 If it is specified, it is assumed that messages may be
++ *                 received on app endpoints during boot and shutdown. Runs in
++ *                 process context.
+  * @recv_message:  Function called when a message from RTKit is received
+  *                 on a non-system endpoint. Called from a worker thread.
+  * @recv_message_early:
+@@ -57,6 +62,7 @@ struct apple_rtkit_shmem {
+  */
+ struct apple_rtkit_ops {
+ 	void (*crashed)(void *cookie, const void *crashlog, size_t crashlog_size);
++	void (*epmap_done)(void* cookie);
+ 	void (*recv_message)(void *cookie, u8 endpoint, u64 message);
+ 	bool (*recv_message_early)(void *cookie, u8 endpoint, u64 message);
+ 	int (*shmem_setup)(void *cookie, struct apple_rtkit_shmem *bfr);
+@@ -180,13 +186,13 @@ int apple_rtkit_send_message(struct apple_rtkit *rtk, u8 ep, u64 message,
+ int apple_rtkit_poll(struct apple_rtkit *rtk);
+ 
+ /*
+- * Convert an endpoint number relative to start of app endpoint to an absolute
+- * endpoint number.
+- *
+- * Returns the endpoint number on success, 0 on failure.
++ * Get RTKit protocol version.
+  *
+  * @rtk:            RTKit reference
++ * @major_ver:      Pointer to store the major version
++ * @minor_ver:      Optional, pointer to store the minor version
+  */
+-u8 apple_rtkit_app_ep_to_ep(struct apple_rtkit *rtk, u8 app_ep);
++void apple_rtkit_protocol_version(struct apple_rtkit *rtk, u16 *major_ver,
++				  u16 *minor_ver);
+ 
+ #endif /* _LINUX_APPLE_RTKIT_H_ */

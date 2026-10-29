@@ -1,0 +1,32 @@
+J81 SYSTEMD ADAPTER STAGE v1.1 — LIVE RESULT
+Date: 2026-10-29 (America/New_York)
+Result: PASS
+Device: iPad Air 2 Wi-Fi / J81 / T7001
+Kernel: 7.3.0-rc1-j81-omarchy-netroot
+
+USB recovery: PASS after one cable reconnect; en5 active, DHCP 172.16.42.2.
+Live diagnostic shell: PASS at 172.16.42.1:23.
+Full Omarchy NFS lower: PASS (read-only).
+RAM OverlayFS: PASS (96 MiB bound).
+Private RAM /dev/null: PASS (separate 1 MiB tmpfs).
+J71b masks in RAM only: PASS.
+J81 guard syntax: PASS.
+Arch systemd-analyze unit validation: PASS (--man=no --recursive-errors=no).
+Original J71b root preserved: PASS (original marker checks).
+Guest mounts and temporary directories removed: VERIFIED.
+Mac temporary NFS service and /etc/exports removed: VERIFIED.
+Diagnostic USB shell remains alive: PASS.
+Offline regression checks: 39 PASS.
+
+Additional executable version probes:
+- systemd 262.1-1-arch (printed a user.conf Function not implemented warning).
+- labwc 0.20.2, wlroots 0.20.2.
+- Quickshell 0.3.2.
+All three version commands exited successfully. This does not prove service or GUI startup.
+Display devices: /dev/dri/card0 and /dev/fb0 present.
+Input devices: gpio-keys only; touchscreen absent in the current kernel's input list.
+
+No reboot, DFU, systemd PID1 transition, original J71b service startup, or iPad internal storage operations occurred.
+The original toolkit, rootfs and known-working J81 boot payload were preserved.
+Systemd PID1 handoff and the Omarchy desktop are NOT BOOT-TESTED.
+Next engineering work: J81 initramfs handoff preserving USB gadget/NFS and diagnostic service lifetime, then controlled desktop/input bring-up.

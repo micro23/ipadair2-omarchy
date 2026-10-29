@@ -43,3 +43,17 @@ Desktop reference:
   binaries, Apple drivers, proprietary firmware or upstream distribution image.
 
 No ownership of third-party hardware drivers or their research is claimed.
+
+2026-10-29 integration and ANS1 experiments:
+  OrchardLinux/hardware e2b1b591b495ae479951b06c18b99d3c86a0a7a9 is the
+  tested refactored baseline. ANS1 driver/core support is Nick Chan's work,
+  reconciled and hardened read-only by mattonik/ipad-nixos b94d42f78e04c5465e290340a5b6879bbc5956b6
+  from HoolockLinux/linux ans1 ed8528f482a526371e59711645794c91fafb2b42.
+  Kernel-derived additions remain under their existing GPL-2.0/MIT terms.
+  The experimental USERAREA range gate and host diagnostics do not change
+  authorship of that driver. Host glue uses the existing host MIT notice.
+  Pongo comparison uses checkra1n/PongoOS bb492b004265ce91123caa23b8bc04b2eff6d2b7,
+  its pinned newlib f9ea5054de8fb51dff6f6d3c2e7cdd4aa89744b8, and Orchard's
+  quiet patch from the tested hardware baseline. No Pongo binary is distributed.
+  The separately tested full userspace is OrchardLinux/omarchy-a v0.1.1; no
+  rootfs image is redistributed here.

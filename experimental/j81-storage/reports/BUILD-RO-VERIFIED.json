@@ -1,0 +1,15 @@
+{
+  "reference_commit": "b94d42f78e04c5465e290340a5b6879bbc5956b6",
+  "driver_reference": "Hoolock ans1 ed8528f482a526371e59711645794c91fafb2b42",
+  "base": "Orchard e2b1b591 unchanged Wi-Fi/display stack",
+  "release": "7.3.0-rc1-orchard-j81-storage-ro-v1",
+  "write_unlock_submission_absent": true,
+  "write_flush_drvout_rejected": true,
+  "all_ten_namespaces_readonly": true,
+  "asp_symbols_present": true,
+  "hardware_tested": false,
+  "files": {
+    "Image.gz": "2701360a546b807d1df56f7408b39296ab58e949198819d62882a6e9fe3346cf",
+    "j81.dtb": "9c21681e8516496fc33c8fff5127bd11f94ceef330f34eb5f4eaf203fbbc101c"
+  }
+}

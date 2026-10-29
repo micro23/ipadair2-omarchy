@@ -1,0 +1,11 @@
+--- src/kernel/entry.c normal
++++ src/kernel/entry.c quiet
+@@ -3331,8 +3331,6 @@
+     __asm__ volatile("dsb sy");
+     if(boot_msg)
+         screen_puts(boot_msg);
+-    else
+-        screen_fill_basecolor();
+ }
+ extern uint64_t gM1N1Base;
+ extern void set_exception_stack_core0(void);

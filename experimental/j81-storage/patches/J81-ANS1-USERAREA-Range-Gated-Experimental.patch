@@ -1,0 +1,154 @@
+--- a/drivers/block/asp.c
++++ b/drivers/block/asp.c
+@@ -28,6 +28,8 @@
+ #include <linux/reset.h>
+ #include <linux/dmapool.h>
+ 
++#include "j81_asp_write_range.h"
++
+ #define DEVICE_NAME	"asp"
+ #define DISK_NAME	"asp%dn%d"
+ 
+@@ -249,10 +251,16 @@
+ 	u8 status;
+ };
+ 
+-// BLK_STS_MEDIUM
+-static bool enable_reformat;
+-module_param(enable_reformat, bool, 0644);
+-MODULE_PARM_DESC(enable_reformat, "Automatically format unformatted media");
++/* Explicit, immutable-at-runtime opt-in. Default remains controller-locked. */
++static bool allow_userarea_writes;
++module_param(allow_userarea_writes, bool, 0400);
++MODULE_PARM_DESC(allow_userarea_writes, "Experimental USERAREA-only writes within the explicit range (default false)");
++static unsigned long long write_first_lba;
++module_param(write_first_lba, ullong, 0400);
++MODULE_PARM_DESC(write_first_lba, "First writable USERAREA logical LBA (4096 bytes)");
++static unsigned long long write_lba_count;
++module_param(write_lba_count, ullong, 0400);
++MODULE_PARM_DESC(write_lba_count, "Writable USERAREA logical LBA count; zero refuses write mode");
+ 
+ //static int asp_major;
+ static DEFINE_IDA(asp_instance_ida);
+@@ -479,23 +487,19 @@
+ 
+ 	cmd->tag = req->tag;
+ 
+-	/*
+-	 * Observation-only hardening: this build never accepts anything that
+-	 * could mutate media, at this single, central dispatch point that
+-	 * every namespace's requests pass through -- independent of, not a
+-	 * replacement for, the WRITE_UNLOCK removal and set_disk_ro() calls
+-	 * elsewhere in this file. REQ_OP_DRV_OUT covers internally-classified
+-	 * "write" admin commands (see asp_is_write()); no legitimate one of
+-	 * those remains once WRITE_UNLOCK itself is never issued. See
+-	 * docs/plans/2026-09-13-j81-ans1-observation-only.md.
+-	 */
+-	switch (req_op(req)) {
+-		case REQ_OP_WRITE:
+-		case REQ_OP_DRV_OUT:
+-		case REQ_OP_FLUSH:
++	/* Reject admin-output, format/discard and all auxiliary mutations. */
++	if (req_op(req) == REQ_OP_DRV_OUT)
++		return BLK_STS_NOTSUPP;
++	if (req_op(req) == REQ_OP_WRITE || req_op(req) == REQ_OP_FLUSH) {
++		struct apple_asp *asp = queue_to_apple_asp(qd);
++		if (!allow_userarea_writes || qd->type != ASP_QUEUE_TYPE_USERAREA)
+ 			return BLK_STS_NOTSUPP;
+-		default:
+-			break;
++		if (req_op(req) == REQ_OP_WRITE &&
++		    ((blk_rq_pos(req) & 7) || (blk_rq_bytes(req) & (ASP_LBA_SIZE - 1)) ||
++		     !j81_asp_write_range_allowed(asp->capacity, write_first_lba,
++			write_lba_count, blk_rq_pos(req) >> 3,
++			blk_rq_bytes(req) >> ASP_LBA_SHIFT)))
++			return BLK_STS_NOTSUPP;
+ 	}
+ 
+ 	switch (req_op(req)) {
+@@ -505,7 +509,14 @@
+ 			break;
+ 
+ 		case REQ_OP_READ:
+-			ret = asp_setup_rw(qd, req, false);
++		case REQ_OP_WRITE:
++			ret = asp_setup_rw(qd, req, req_op(req) == REQ_OP_WRITE);
++			break;
++		case REQ_OP_FLUSH:
++			memset(cmd, 0, sizeof(*cmd));
++			cmd->tag = req->tag;
++			cmd->op = ASP_CMD_FLUSH;
++			ret = BLK_STS_OK;
+ 			break;
+ 
+ 		default:
+@@ -869,19 +880,24 @@
+ 
+ 	kfree(identify);
+ 
+-	/*
+-	 * Observation-only hardening: deliberately never issue
+-	 * ASP_CMD_WRITE_UNLOCK. Upstream calls this unconditionally here as
+-	 * part of normal probe, immediately unlocking writes to every
+-	 * namespace at the controller/firmware level -- its own comment a
+-	 * few lines below (kept, see the set_disk_ro block) admits that
+-	 * putting the wrong things in some of them "could cause persistent
+-	 * controller crashes." This build is read-only by construction: the
+-	 * controller itself is never asked to unlock writes in the first
+-	 * place, on top of the block-layer read-only marking below and
+-	 * asp_setup_cmd()'s own hard rejection of any write/flush request.
+-	 * See docs/plans/2026-09-13-j81-ans1-observation-only.md.
+-	 */
++	/* Default leaves the controller write lock armed. Explicit write mode
++	 * must name a nonempty, in-capacity USERAREA range before any unlock. */
++	if (allow_userarea_writes) {
++		if (!j81_asp_write_range_allowed(asp->capacity, write_first_lba,
++			write_lba_count, write_first_lba, write_lba_count)) {
++			dev_err(asp->dev, "Invalid USERAREA write range; refusing unlock\n");
++			ret = -EINVAL;
++			goto out_free_cmd;
++		}
++		memset(cmd, 0, sizeof(*cmd));
++		cmd->op = ASP_CMD_WRITE_UNLOCK;
++		status = asp_submit_sync_admin_cmd(asp->admin_rq, cmd, NULL, 0);
++		if (status) {
++			ret = -EIO;
++			goto out_free_cmd;
++		}
++		dev_warn(asp->dev, "Experimental USERAREA write range enabled; auxiliary namespaces blocked\n");
++	}
+ 
+ 	struct queue_limits lim = {
+ 		.logical_block_size = ASP_LBA_SIZE,
+@@ -929,7 +945,7 @@
+ 	 * read-only too, so every namespace this driver exposes is read-only,
+ 	 * with no exception, in this build.
+ 	 */
+-	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_USERAREA].disk, true);
++	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_USERAREA].disk, !allow_userarea_writes);
+ 	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_LLB].disk, true);
+ 	set_disk_ro(asp->q_data[ASP_QUEUE_TYPE_FW].disk, true);
+ 	/* write disallowed at controller level */
+--- /dev/null
++++ b/drivers/block/j81_asp_write_range.h
+@@ -0,0 +1,20 @@
++/* SPDX-License-Identifier: GPL-2.0 OR MIT */
++#ifndef J81_ASP_WRITE_RANGE_H
++#define J81_ASP_WRITE_RANGE_H
++#ifdef __KERNEL__
++#include <linux/types.h>
++#else
++#include <stdbool.h>
++#endif
++/* All values are 4096-byte logical blocks. Avoid overflow in every bound. */
++static inline bool j81_asp_write_range_allowed(unsigned long long capacity,
++        unsigned long long first, unsigned long long count,
++        unsigned long long start, unsigned long long blocks)
++{
++    if (!count || !blocks || first > capacity || count > capacity - first)
++        return false;
++    if (start < first || blocks > count)
++        return false;
++    return start - first <= count - blocks;
++}
++#endif

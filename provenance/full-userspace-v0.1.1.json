@@ -1,0 +1,9 @@
+{
+  "upstream": "OrchardLinux/omarchy-a",
+  "release": "v0.1.1",
+  "rootfs_archive_sha256": "a5850a1575f52edab451783c3e4fdc2ac8cf727d5740c135c3929ff732da255c",
+  "bytes": 1099445091,
+  "local_archive_reverified": true,
+  "archive_redistributed": false,
+  "qualification": "Native utilities and full NFS/RAM UI session; no installed-root PID1 boot or internal installation"
+}

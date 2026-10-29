@@ -1,0 +1,21 @@
+{
+  "release": "7.3.0-rc1-orchard-j81-storage-rwgated-v1",
+  "ans1_is_module": true,
+  "automatic_ans1_probe": false,
+  "storage_writes_default": false,
+  "conditional_write_capability": true,
+  "write_range_opt_in_required": true,
+  "hardware_tested": false,
+  "files": {
+    "Image.gz": "472d907c3d980dbd58b539768e14c42cfdc077c7a2a0c92de3a06009c506d661",
+    "j81.dtb": "9c21681e8516496fc33c8fff5127bd11f94ceef330f34eb5f4eaf203fbbc101c",
+    "linux.bin": "60d887ec79a59380896a2418a3762939cf35f780c8621111885f602e776e0990"
+  },
+  "source_sha256": {
+    "asp.c": "c1749f8566b9ea63df20eb86d739f64332ea71d193bfaf169c859238b367ffd7",
+    "j81_asp_write_range.h": "b4644928a7bb392b5cf669f547cd974fa418fffe01639941869e221cce2dbd1f"
+  },
+  "range_c_assertions_passed": 16,
+  "address_and_undefined_behavior_sanitizers_passed": true,
+  "hardware_write_tested": false
+}

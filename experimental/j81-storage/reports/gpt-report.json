@@ -1,0 +1,19 @@
+{
+  "logical_block_size": 4096,
+  "userarea_bytes": 64000000000,
+  "primary_header_crc_valid": true,
+  "entry_crc_valid": true,
+  "backup_header_crc_valid": true,
+  "backup_entry_array_read": false,
+  "partitions": [
+    {
+      "index": 1,
+      "type_guid": "7c3457ef-0000-11aa-aa11-00306543ecac",
+      "first_lba": 6,
+      "last_lba": 15624994,
+      "bytes": 63999954944
+    }
+  ],
+  "unallocated_usable_bytes": 0,
+  "internal_writes_performed": false
+}

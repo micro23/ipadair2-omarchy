@@ -1,0 +1,58 @@
+[
+  {
+    "path": "desktop/guest-session.sh",
+    "owner_source_sha256": "c927d1d96a32b36b0f6097860f57d99b4bb89c1c90a6ccba043acfef9265b9a3",
+    "published_sha256": "c927d1d96a32b36b0f6097860f57d99b4bb89c1c90a6ccba043acfef9265b9a3",
+    "changes": []
+  },
+  {
+    "path": "desktop/run_desktop.py",
+    "owner_source_sha256": "ce038069b2dd4e6aefbad705672d022e112277d15afa73effc17a1fa239d87d1",
+    "published_sha256": "06a3d17dad918db06af1efceca51d155eeb59eb3db913989d224a462dc94c0a4",
+    "changes": [
+      "Owner absolute PROJECT path replaced by J81_PROJECT_DIR or home-relative default; runtime logic retained."
+    ]
+  },
+  {
+    "path": "fullroot/full_root_stage.py",
+    "owner_source_sha256": "ed36de9e36484182ff22aa80d400f2cc15a2bfc6e6f0dfe3f058d307d59ede70",
+    "published_sha256": "ed36de9e36484182ff22aa80d400f2cc15a2bfc6e6f0dfe3f058d307d59ede70",
+    "changes": []
+  },
+  {
+    "path": "fullroot/test_full_root_usb.py",
+    "owner_source_sha256": "63980ab8156c17c32733ad90bc2f10122ef2c6d7be695540a15dbf953eea9fd9",
+    "published_sha256": "63980ab8156c17c32733ad90bc2f10122ef2c6d7be695540a15dbf953eea9fd9",
+    "changes": []
+  },
+  {
+    "path": "fullroot/test_offline.py",
+    "owner_source_sha256": "dcd532df344ebcdff9f375ab1002e0ee525f5d95d16cdc5126fd60d3cf419f7f",
+    "published_sha256": "dcd532df344ebcdff9f375ab1002e0ee525f5d95d16cdc5126fd60d3cf419f7f",
+    "changes": []
+  },
+  {
+    "path": "systemd-stage/j81_systemd_adapter_stage.py",
+    "owner_source_sha256": "27b760307c0db533dd2e8e365132b9ffabfd0dc0e3398a586cebba548b1d33ad",
+    "published_sha256": "27b760307c0db533dd2e8e365132b9ffabfd0dc0e3398a586cebba548b1d33ad",
+    "changes": []
+  },
+  {
+    "path": "systemd-stage/test_offline.py",
+    "owner_source_sha256": "12b57d69737766a10b9837e8fb2246beb4c057f3e2362bc25756208bd8e12fc5",
+    "published_sha256": "12b57d69737766a10b9837e8fb2246beb4c057f3e2362bc25756208bd8e12fc5",
+    "changes": []
+  },
+  {
+    "path": "arch-exec/j81_arch_exec_test.py",
+    "owner_source_sha256": "3db4cede36213b02fbc5df8d62d7e028e9138c98ed3519202142477a534715e8",
+    "published_sha256": "3db4cede36213b02fbc5df8d62d7e028e9138c98ed3519202142477a534715e8",
+    "changes": []
+  },
+  {
+    "path": "systemd-stage/Run-J81-Systemd-Adapter.command",
+    "owner_source_sha256": "1d591f22bc6277fc94f2e12467e6b96ea9989695c0c2087fc996921f51c8820e",
+    "published_sha256": "1d591f22bc6277fc94f2e12467e6b96ea9989695c0c2087fc996921f51c8820e",
+    "changes": []
+  }
+]

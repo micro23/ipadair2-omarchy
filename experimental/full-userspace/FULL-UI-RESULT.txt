@@ -1,0 +1,36 @@
+J81 FULL-ROOT OMARCHY UI — LIVE PASS, 2026-10-29
+
+This session displayed the actual Orchard Omarchy A v0.1.1 Quickshell UI,
+including wallpaper, top bar, clock, battery indicator, root menu and app grid.
+Foot terminal, Omacalc and Firefox windows were rendered natively by Labwc
+on simpledrm at 1536x2048. Screenshots were captured from the compositor.
+Keyboard input via omarchy-wtype executed a command inside Foot as UID1000
+and wrote keyboard-ok to a RAM-only proof file.
+
+A second full UI session initialized its own machine ID, user theme and
+private session D-Bus, and launched PipeWire and WirePlumber. wpctl showed
+both plus Quickshell and the wlroots portal as connected clients. There
+were no hardware audio devices, and no audio-output claim is made.
+
+The combined launcher guest path was then tested with an existing caller-
+owned NFS export. Its shell IPC reply and internal compositor-frame proof
+both passed; compositor exit was 0 and guest cleanup verified. Earlier
+readiness checks incorrectly tried to read private namespace runtime files
+through the outer filesystem. The final version reads via /proc/PID/root
+and passed its live retry. Native launcher automatic NFS setup uses the
+original pinned, previously hardware-tested host helper; this particular
+.command setup branch has not had a separate new end-to-end invocation.
+
+The desktop and applications are real, but they are NOT installed on the
+iPad's NAND. The root remains read-only NFS with a disposable RAM upper.
+All demo processes and guest mounts have been removed, and USB remains up.
+No internal storage writes or reboot occurred.
+
+Remaining work for the user's full-install goal:
+- Reconcile J81 ANS1 read-only storage support into the current driver tree.
+- Validate this owner's actual NAND/partition layout, backup and writable path.
+- Present exact destructive partition changes before erasing/repartitioning.
+- Build an installed-root boot/startup path and J81 charging policy.
+- Native touch, hardware audio, Bluetooth and internet need qualification.
+Firefox opens, but logs namespace/sandbox constraints in this chroot;
+this session is not a qualified general browsing environment.

@@ -1,5 +1,24 @@
 # ipadair2-omarchy
 
+## Current status — 2026-10-29
+
+The J81 baseline integration, measured hardware results and kernel-wheel fix
+have been incorporated into upstream Orchard hardware `main`. See the
+[maintainer handoff](integration/2026-10-29/REPORT.md).
+
+The fresh [Pongo quiet/normal comparison](docs/pongo/COMPARISON.md) is complete:
+both local source builds returned to iPadOS without a Pongo USB endpoint.
+The known-working pinned Hoolock prebuilt remains the qualified loader.
+
+A separate [ANS1 experiment](experimental/j81-storage/README.md) booted Linux
+and read this J81's internal 64 GB USERAREA with every namespace read-only.
+Full Omarchy A v0.1.1 userspace and native applications have run from NFS/RAM;
+**a persistent internal installation and untethered power-on boot are unfinished**.
+The experimental write candidate compiles but has no successful live write test.
+See the [full checkpoint](docs/status/2026-10-29.md).
+
+## Original hardware handoff
+
 Public hardware handoff for the **Wi-Fi iPad Air 2 — iPad5,3 / J81AP / A8X
 T7001**. This repository contains the device description, exact kernel build
 inputs, public device-tree reference, RAM initramfs sources, private-firmware
@@ -28,6 +47,9 @@ installer**. There is no launch-manifest URL to imply that those pieces exist.
 | `runtime/j81/` | Qualified Wi-Fi control logic and the required radio/scan/DNS corrections |
 | `provenance/` | Upstream identities, hashes and source-file receipts |
 | `LICENSES/` | Retained component notices |
+| `docs/pongo/` | Controlled quiet/normal source, build and hardware comparison |
+| `integration/2026-10-29/` | Developer-port validation, fixes and upstream incorporation |
+| `experimental/j81-storage/` | ANS1 patches, guarded host tools, tests and candidate root policy |
 
 Start with [the device notes](devices/j81/README.md),
 [kernel build instructions](kernel/j81/README.md) and
@@ -44,9 +66,10 @@ not copy P105-specific drivers, boot assumptions or qualification claims.
 
 The descriptor targets the v1 format from
 [OrchardLinux/hardware](https://github.com/OrchardLinux/hardware/tree/9bcaef15ba0250503497d3754fa1254e48f96013).
-The upstream Orchard producers and runtime still need J81 integration. A
-standalone repository containing these files does not register a device in an
-installed Orchard package automatically.
+These original producer inputs retain their historical identities. Upstream
+Orchard now registers experimental J81/J82 support through its newer hardware
+stack; this repository does not replace an installed Orchard package. The
+2026-10-29 integration report records the exact baseline actually tested.
 
 ## Credits and licenses
 

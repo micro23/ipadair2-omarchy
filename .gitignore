@@ -24,3 +24,16 @@ __pycache__/
 *radio-selector*.json
 *radio-run*.json
 *wifi-run*.json
+
+# Device-side experiment state and generated build products
+private-live/
+private-state/
+private-*/
+*.sparsebundle/
+*.sparseimage
+*.raw
+*.cpio*
+*-Pongo
+*.ko
+**/build/Pongo
+Image.gz

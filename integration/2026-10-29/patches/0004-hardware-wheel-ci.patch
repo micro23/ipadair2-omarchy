@@ -1,0 +1,29 @@
+From 3365d43333eec8895f4dfffaa9ab5a034ec3ef2f Mon Sep 17 00:00:00 2001
+From: Micro <micro@Micros-MacBook-Air.local>
+Date: Thu, 29 Oct 2026 11:08:45 -0400
+Subject: [PATCH] Verify packaged kernel resources in wheel CI
+
+---
+ .github/workflows/build.yml | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/.github/workflows/build.yml b/.github/workflows/build.yml
+index e984908..0ffcc5b 100644
+--- a/.github/workflows/build.yml
++++ b/.github/workflows/build.yml
+@@ -78,7 +78,11 @@ jobs:
+           name: hardware-packages
+           path: out/packages
+       - run: python -m pip install out/packages/*.whl && python -m pip check
+-      - run: python -m unittest discover -s tests -v
++      - name: Test the installed package and built kernel resources
++        run: |
++          wheels=(out/packages/*.whl)
++          [[ ${#wheels[@]} -eq 1 && -f "${wheels[0]}" ]]
++          ORCHARD_HARDWARE_WHEEL="${wheels[0]}" python -m unittest discover -s tests -v
+   native-smoke:
+     needs: test
+     runs-on: ubuntu-24.04-arm
+-- 
+2.54.0 (Apple Git-157)
+

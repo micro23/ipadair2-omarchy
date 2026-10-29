@@ -1,0 +1,87 @@
+From 153744d26b12dff8e4b61758f93a784885c883ae Mon Sep 17 00:00:00 2001
+From: Micro <micro@Micros-MacBook-Air.local>
+Date: Thu, 29 Oct 2026 10:44:59 -0400
+Subject: [PATCH] Include layered kernel inputs in hardware wheels
+
+---
+ pyproject.toml                    |  4 +--
+ tests/test_kernel_package_data.py | 54 +++++++++++++++++++++++++++++++
+ 2 files changed, 56 insertions(+), 2 deletions(-)
+ create mode 100644 tests/test_kernel_package_data.py
+
+diff --git a/pyproject.toml b/pyproject.toml
+index e012081..e310991 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -36,6 +36,6 @@ orchard_hardware = [
+   "boot/quiet/*.py", "boot/quiet/*.patch",
+   "boot/m1n1/build", "boot/m1n1/install-toolchain", "boot/m1n1/Containerfile", "boot/m1n1/upstream.lock", "boot/m1n1/series", "boot/m1n1/sources.toml", "boot/m1n1/patches/*/*.patch",
+   "kernel/Containerfile", "kernel/install-toolchain", "kernel/build", "kernel/build-modules", "kernel/stage-modules.py",
+-  "kernel/upstream.lock", "kernel/configs/*/*", "kernel/devicetree/*/*",
+-  "kernel/patches/*/*.patch", "kernel/modules/*/*/*"
++  "kernel/upstream.lock", "kernel/series.py", "kernel/series/*", "kernel/configs/*/*", "kernel/devicetree/*/*",
++  "kernel/patches/**/*.patch", "kernel/modules/*/*/*"
+ ]
+diff --git a/tests/test_kernel_package_data.py b/tests/test_kernel_package_data.py
+new file mode 100644
+index 0000000..8104d45
+--- /dev/null
++++ b/tests/test_kernel_package_data.py
+@@ -0,0 +1,54 @@
++"""Kernel producers must have their complete layered inputs after wheel install."""
++import glob
++import os
++from pathlib import Path
++import subprocess
++import sys
++import unittest
++import zipfile
++
++try:
++    import tomllib
++except ImportError:
++    import tomli as tomllib
++
++
++ROOT = Path(__file__).resolve().parents[1]
++
++
++def required_kernel_resources():
++    required = {"kernel/series.py"}
++    for series in (ROOT / "kernel/series").iterdir():
++        if not series.is_file():
++            continue
++        required.add(str(series.relative_to(ROOT)))
++        output = subprocess.check_output(
++            [sys.executable, str(ROOT / "kernel/series.py"), series.name], text=True
++        )
++        required.update(str(Path(line).relative_to(ROOT)) for line in output.splitlines() if line)
++    return required
++
++
++class KernelPackageData(unittest.TestCase):
++    def test_declared_package_data_covers_every_platform_series(self):
++        config = tomllib.loads((ROOT / "pyproject.toml").read_text())
++        patterns = config["tool"]["setuptools"]["package-data"]["orchard_hardware"]
++        included = {
++            str(Path(name).relative_to(ROOT))
++            for pattern in patterns
++            for name in glob.glob(str(ROOT / pattern), recursive=True)
++            if Path(name).is_file()
++        }
++        missing = required_kernel_resources() - included
++        self.assertFalse(missing, "Kernel resources missing from package data: " + ", ".join(sorted(missing)))
++
++    @unittest.skipUnless(os.environ.get("ORCHARD_HARDWARE_WHEEL"), "Set ORCHARD_HARDWARE_WHEEL to validate a built wheel")
++    def test_built_wheel_contains_every_platform_series(self):
++        with zipfile.ZipFile(os.environ["ORCHARD_HARDWARE_WHEEL"]) as wheel:
++            included = set(wheel.namelist())
++        missing = {"orchard_hardware/" + path for path in required_kernel_resources()} - included
++        self.assertFalse(missing, "Built wheel is missing kernel resources: " + ", ".join(sorted(missing)))
++
++
++if __name__ == "__main__":
++    unittest.main()
+-- 
+2.54.0 (Apple Git-157)
+
