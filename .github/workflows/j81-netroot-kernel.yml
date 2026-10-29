@@ -1,0 +1,112 @@
+name: J81 Omarchy A network-root kernel (experimental)
+
+on:
+  push:
+    branches:
+      - experiments/j81-omarchy-a-netroot
+    paths:
+      - .github/workflows/j81-netroot-kernel.yml
+      - ci/j81/build_netroot.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-netroot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out experimental CI helper
+        uses: actions/checkout@v4
+        with:
+          path: controller
+
+      - name: Check out exact qualified J81 source
+        uses: actions/checkout@v4
+        with:
+          ref: 7ea2b2b0f5c070690bf0efafd25a69d6ea345454
+          path: j81-source
+
+      - name: Install x86_64 to AArch64 cross-compilation tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            build-essential bison flex m4 bc device-tree-compiler \
+            libssl-dev libelf-dev python3 curl ca-certificates git patch
+          uname -sm
+          aarch64-linux-gnu-gcc --version | head -n 1
+
+      - name: Prepare cross-tool layout for pinned J81 producer
+        shell: bash
+        run: |
+          set -euo pipefail
+          tc="$RUNNER_TEMP/j81-toolchain"
+          mkdir -p "$tc/usr/lib" "$tc/usr/share"
+          ln -s /usr/bin "$tc/usr/bin"
+          ln -s /usr/include "$tc/usr/include"
+          ln -s /usr/lib/x86_64-linux-gnu "$tc/usr/lib/x86_64-linux-gnu"
+          ln -s /usr/share/bison "$tc/usr/share/bison"
+          for tool in aarch64-linux-gnu-gcc aarch64-linux-gnu-ld bison m4 dtc fdtget; do
+            test -x "$tc/usr/bin/$tool" || { echo "Missing $tool"; exit 1; }
+          done
+
+      - name: Download and SHA256-verify pinned Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --connect-timeout 20 \
+            'https://github.com/HoolockLinux/linux/archive/6831bc701a6ce059e71e5aaa9488c9195bea6927.tar.gz' \
+            -o "$RUNNER_TEMP/j81-linux.tar.gz"
+          cd "$RUNNER_TEMP"
+          echo '5eca8c1a096009ef867451d08433735ff29548220adb880f85b9840de65bf15f  j81-linux.tar.gz' | sha256sum -c -
+
+      - name: Validate pinned J81 source and tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 controller/ci/j81/build_netroot.py \
+            --repo "$GITHUB_WORKSPACE/j81-source" \
+            --linux-archive "$RUNNER_TEMP/j81-linux.tar.gz" \
+            --toolchain "$RUNNER_TEMP/j81-toolchain" \
+            --output "$GITHUB_WORKSPACE/j81-netroot-build" \
+            --check-inputs
+
+      - name: Build isolated J81 NFSv3 client kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 controller/ci/j81/build_netroot.py \
+            --repo "$GITHUB_WORKSPACE/j81-source" \
+            --linux-archive "$RUNNER_TEMP/j81-linux.tar.gz" \
+            --toolchain "$RUNNER_TEMP/j81-toolchain" \
+            --output "$GITHUB_WORKSPACE/j81-netroot-build" \
+            --jobs 4
+
+      - name: Upload UNTESTED kernel build
+        uses: actions/upload-artifact@v4
+        with:
+          name: j81-netroot-kernel-UNTESTED
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            j81-netroot-build/netroot/products/Image.gz
+            j81-netroot-build/netroot/products/t7001-j81.dtb
+            j81-netroot-build/netroot/products/kernel.config
+            j81-netroot-build/netroot/products/netroot-manifest.json
+            j81-netroot-build/netroot/binary-dtb-validation.json
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j81-netroot-build-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            j81-netroot-build/netroot/*.log
+            j81-netroot-build/netroot/*verification.json
+            j81-netroot-build/netroot/build-result.json
