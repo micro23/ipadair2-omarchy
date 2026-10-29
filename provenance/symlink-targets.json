@@ -1,0 +1,8 @@
+{
+  "format": "Git symlink targets, validated separately from regular-file SHA256SUMS",
+  "symlinks": {
+    "experimental/j81-storage/root-overlay/etc/systemd/system/j71b-charge.service": "/dev/null",
+    "experimental/j81-storage/root-overlay/etc/systemd/system/j71b-platform-ready.service": "/dev/null",
+    "experimental/j81-storage/root-overlay/etc/systemd/system/omarchy-diagnostics.service": "/dev/null"
+  }
+}

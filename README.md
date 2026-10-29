@@ -84,3 +84,10 @@ captured Apple device tree, OTP dump, calibration, Wi-Fi credentials or
 session identifiers are included. Binary/rootfs distributions are separate
 from this source tree and need their own corresponding-source and license
 review.
+
+## Verify this source checkout
+
+Run `shasum -a 256 -c SHA256SUMS` from the repository root. The manifest covers
+regular source files; [symlink targets](provenance/symlink-targets.json) record
+the three systemd masks separately. They must remain symlinks to `/dev/null`,
+not copies of the host device file. Git also records their symlink mode.
