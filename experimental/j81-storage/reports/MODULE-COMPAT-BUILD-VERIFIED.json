@@ -1,0 +1,16 @@
+{
+  "kernel_release": "7.3.0-rc1-orchard-j81-storage-ro-v2mod",
+  "module_sha256": "3e36f4b045a38ba4eeb46cce3a24a9d19955568b5831cd37e4124b5d6d6961f9",
+  "module_bytes": 354088,
+  "vermagic_matches_baseline": true,
+  "dependencies_match_baseline": true,
+  "aliases_match_baseline": true,
+  "undefined_symbols_all_in_baseline_exports": true,
+  "undefined_symbol_count": 66,
+  "base_kernel_config_unchanged": true,
+  "kernel_image_rebuilt_or_replaced": false,
+  "hardware_tested": false,
+  "write_qualification": false,
+  "gate_source_identical_to_approved_candidate": true,
+  "controller_preflight_tests_passed": 5
+}

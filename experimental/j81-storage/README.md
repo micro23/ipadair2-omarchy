@@ -1,9 +1,10 @@
 # J81 ANS1 and internal-root experiments
 
 **Research source and evidence, not an internal-storage installer.** The
-read-only module has a successful J81 session. The range-gated write candidate
-has no successful live write test, and the native-root handoff is unfinished.
-No internal storage write occurred during these experiments.
+read-only module has a successful J81 session. A matching range-gated module
+subsequently passed one explicitly approved 4096-byte write/read-back/restore,
+with the original bytes restored and verified. Native-root handoff and full
+filesystem installation remain unfinished. No erase or formatting was performed.
 
 ## Exact base and attribution
 
@@ -68,7 +69,7 @@ See [namespace/read result](reports/storage-report.json),
 [GPT result](reports/gpt-report.json), and the
 [scoped build receipt](reports/BUILD-RO-V2MOD-VERIFIED.json).
 
-## Write candidate: compiled, not qualified
+## Write candidate: bounded hardware result; filesystem installation unqualified
 
 The separate range-gated candidate defaults to controller-locked read-only.
 Opt-in requires all of these at module load:
@@ -89,8 +90,16 @@ Sixteen C boundary assertions against the actual range helper passed with
 address/undefined-behavior sanitizers, and the full kernel/49 matching modules
 built. Those checks do not exercise the real controller write protocol.
 The new image reached owner-visible Linux text, but USB did not enumerate;
-the module write probe was never sent. The proposed one-block write/read-back/
-restore has not run. No writable filesystem or persistent reboot result exists.
+the module write probe was never sent in that session. A later matching-module
+experiment retained the exact working kernel/DTB/loader/bootargs and changed only
+`asp.ko`. The module SHA256 is
+`3e36f4b045a38ba4eeb46cce3a24a9d19955568b5831cd37e4124b5d6d6961f9`.
+It booted, and the approved one-block test at logical LBA 15,624,738 passed:
+pattern write, exact read-back, original restoration and exact verification.
+All auxiliary namespaces remained read-only. See the
+[scoped result](reports/approved-block-test-result.json) and matching-module build
+receipts. Do not rerun this write controller automatically or expand its window.
+No writable installed filesystem or persistent reboot result exists.
 
 The [host test controller](host/approved_block_test.py) is **plan-only by default**.
 It is specific to this measured 64 GB unit and the one recorded test block;
@@ -141,3 +150,28 @@ The final bootstrap must mount the internal ext4 root and `switch_root` to its
 systemd. It must not substitute an NFS root or disposable RAM overlay for a
 persistent install. Cold boot remains host-tethered through Pongo/m1n1 unless a
 separate untethered boot mechanism is established.
+
+
+## Native installer-tool preflight and boot draft
+
+Six ARM64 tools and their library closure were matched byte-for-byte against
+the original pinned Omarchy A v0.1.1 archive. The USB-only host HTTP transfer
+served only the tool archive to the selected iPad. Native versions ran; ext4
+creation and all five e2fsck passes succeeded on a 64 MB RAM file. The original
+APFS layout remained intact and the test files/mounts were cleaned. See
+[preflight evidence](reports/native-tools-device-preflight.json).
+A chroot on `/run` needs a bind of the existing `/dev/null`: `/run` is `nodev`,
+so merely creating a character node there still produces permission denied.
+Cleanup inspects `/proc/mounts` because BusyBox `mountpoint` did not identify
+that file bind mount in this environment.
+
+[draft-native-root-handoff.sh](draft-native-root-handoff.sh) is staged source,
+with shell syntax checked only. It requires an exact installed UUID, matching
+ASP module/kernel and partition-sized write window, and is not integrated into
+a tested boot image. It must not be treated as a qualified installer or executed
+as PID 1 until the layout, installed root and recovery plan are established.
+
+[Reference assessment](REFERENCE-OMARCHY-IPAD5.md) records useful A9 architecture
+and the unresolved J81 APFS-independent cold-boot question. The existing
+root-overlay guard still targets partition 1; an alternative layout must update
+and requalify that policy consistently before use.

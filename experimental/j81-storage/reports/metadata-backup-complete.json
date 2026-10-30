@@ -1,0 +1,26 @@
+{
+  "internal_writes_performed": false,
+  "primary_header_crc_valid": true,
+  "primary_and_backup_entries_crc_valid": true,
+  "backup_header_crc_valid": true,
+  "primary_and_backup_entries_identical": true,
+  "logical_block_size": 4096,
+  "userarea_bytes": 64000000000,
+  "partitions": [
+    {
+      "index": 1,
+      "type_guid": "7c3457ef-0000-11aa-aa11-00306543ecac",
+      "first_lba": 6,
+      "last_lba": 15624994,
+      "bytes": 63999954944
+    }
+  ],
+  "apfs_block0": {
+    "signature_present": true,
+    "block_size": 4096,
+    "block_count": 15624989,
+    "bytes": 63999954944
+  },
+  "auxiliary_namespaces_read_only": true,
+  "private_metadata_backup_bytes": 49152
+}

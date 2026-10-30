@@ -1,0 +1,156 @@
+{
+  "architecture": "ARM64",
+  "source_release": "Omarchy A v0.1.1",
+  "selected_files_verified_against_release": true,
+  "file_count": 36,
+  "expanded_bytes": 57635981,
+  "tar_sha256": "5ee53708f0a0c0b4741d92a90a5b741605396188f8e2219e1ff4fc2fe7f00d3b",
+  "files": {
+    "/etc/mke2fs.conf": {
+      "sha256": "c998d64f9b58c2235186f8ee75ba602d1fdb2991d94695fd687ab0e8096b6727",
+      "bytes": 813
+    },
+    "/lib/ld-linux-aarch64.so.1": {
+      "sha256": "b1f2738bdb51e6419d7062f96c8a44bd68853698dc5ac624fa6ca9f9b03d456d",
+      "bytes": 201832
+    },
+    "/usr/bin/blkid": {
+      "sha256": "79d950c520a7de139652d526f5e705e92c5656eee95f8a78c408d4d06ed16775",
+      "bytes": 198904
+    },
+    "/usr/bin/bsdtar": {
+      "sha256": "59d4444ab49208917d9e6dc212cecdfe3787f9ed38e4c5b7744ca33ed8f54eba",
+      "bytes": 133328
+    },
+    "/usr/bin/e2fsck": {
+      "sha256": "48abcde5daff900e774f17f255580a3306d35b21bc2c8660b82016835e3f295c",
+      "bytes": 413880
+    },
+    "/usr/bin/mke2fs": {
+      "sha256": "b3ee01668e1911095e25152ff65191e36bd4c4cbc188a1780e9ae65f9a4a948b",
+      "bytes": 199056
+    },
+    "/usr/bin/sfdisk": {
+      "sha256": "fdb1a01cb14e447232c43c08a95e5944aca134f430481b2eb92b1ca54d743bb3",
+      "bytes": 198872
+    },
+    "/usr/bin/zstd": {
+      "sha256": "4eea9767b11369ebfda02824052458efcdcc08e1f82325c952adec3c1cc4db1c",
+      "bytes": 267584
+    },
+    "/usr/lib/ld-linux-aarch64.so.1": {
+      "sha256": "b1f2738bdb51e6419d7062f96c8a44bd68853698dc5ac624fa6ca9f9b03d456d",
+      "bytes": 201832
+    },
+    "/usr/lib/libacl.so.1": {
+      "sha256": "976ae00af71340cf57b1502f45a657897dd5f8951b7ed1a18ecbf9739f751866",
+      "bytes": 67568
+    },
+    "/usr/lib/libarchive.so.13": {
+      "sha256": "55b8fd6b8ffcf14fd4a9bfe581d6106cc00af348677de40c1e14a18051aff52b",
+      "bytes": 919544
+    },
+    "/usr/lib/libblkid.so.1": {
+      "sha256": "36c2815cbef03db5a25334cf7355d8b4d2b7867398bf7f485806493ec7b92e42",
+      "bytes": 461728
+    },
+    "/usr/lib/libbrotlicommon.so.1": {
+      "sha256": "7a796021e81eaf6eee3b37ebb0b4998da8ed1a11c39f5efb179777322a893f2e",
+      "bytes": 198640
+    },
+    "/usr/lib/libbrotlidec.so.1": {
+      "sha256": "d8fa3162c795856876b9170aba0f09dbae808a26ed288811ebff3097c08a9c74",
+      "bytes": 67496
+    },
+    "/usr/lib/libbrotlienc.so.1": {
+      "sha256": "0c49ed017dd1bf400c9fcf822bff1fd6375d27c6a8387862214396c085a28c4c",
+      "bytes": 854448
+    },
+    "/usr/lib/libbz2.so.1.0": {
+      "sha256": "973f0f527699d7eda3dc15cbc8b236d0c1d877492c4e471b94b15cb51190684a",
+      "bytes": 70504
+    },
+    "/usr/lib/libc.so.6": {
+      "sha256": "6ab264fb4e8df9942b0fb75b48fcd5c30b2f081d8dfaa6c25d7be1d3fce5b2ab",
+      "bytes": 1853736
+    },
+    "/usr/lib/libcom_err.so.2": {
+      "sha256": "e00d7e9f917da09261087bda0b421f1749c8f1536e9ee13f6f0361177243e788",
+      "bytes": 67576
+    },
+    "/usr/lib/libcrypto.so.3": {
+      "sha256": "f17e29025b7dbd0112849ff6e841df5fcc175dabee48cde004321468676bea5b",
+      "bytes": 6564088
+    },
+    "/usr/lib/libe2p.so.2": {
+      "sha256": "76354e6f09bfc86ff28467ec8a23e94cf7bd6e4d7d3be4acd60fe0e3153749f9",
+      "bytes": 69392
+    },
+    "/usr/lib/libext2fs.so.2": {
+      "sha256": "7714544a666b472dfdf54e4c074401ac957e6c38053382ef94630a69bbc3ab4a",
+      "bytes": 528560
+    },
+    "/usr/lib/libfdisk.so.1": {
+      "sha256": "5dbcf5380bf5d2f7b630a83a6adef1895b69bffde5fd8b449e97be0d0f2e058e",
+      "bytes": 526504
+    },
+    "/usr/lib/libgcc_s.so.1": {
+      "sha256": "ac598673a4bf67c0295b6609e46b1fafd0d4adf3f80a513d61ac49ecff772e48",
+      "bytes": 133352
+    },
+    "/usr/lib/libicudata.so.78": {
+      "sha256": "2f624d6c2d92113a45906f245e0d50f4d28572cfe973ede09b25e8422460ba09",
+      "bytes": 33162960
+    },
+    "/usr/lib/libicuuc.so.78": {
+      "sha256": "76217efb5cf1c42284a1572e6b8f1b13147523b0072d3cc819458be5f657fe40",
+      "bytes": 2427016
+    },
+    "/usr/lib/liblz4.so.1": {
+      "sha256": "abbc6d677888c05c812813032fb08f8990a5450124ff9d608c112e150220ba12",
+      "bytes": 198528
+    },
+    "/usr/lib/liblzma.so.5": {
+      "sha256": "ee0801ca9ca614d92f21cd04bc14c31e0624d34c2409362b68971f3e9514b860",
+      "bytes": 198720
+    },
+    "/usr/lib/libm.so.6": {
+      "sha256": "71ed8de709c40acd4fd0177258fc71251a5acdb1d075122409ad42529d6c7a4e",
+      "bytes": 788960
+    },
+    "/usr/lib/libncursesw.so.6": {
+      "sha256": "893eea93d2c1011c1f9edee6393cd46475f115d9f2a788e3b55f34591020316b",
+      "bytes": 527568
+    },
+    "/usr/lib/libreadline.so.8": {
+      "sha256": "c5a59b857c964ef34e9cea2499a0777f952938ffc4df2e3d4276f89ff4b31035",
+      "bytes": 416736
+    },
+    "/usr/lib/libsmartcols.so.1": {
+      "sha256": "1d1d7e881eb7d5c766792c868eb1ffb6399fee3553d1097a0d9a56a3fefc8fc3",
+      "bytes": 264264
+    },
+    "/usr/lib/libstdc++.so.6": {
+      "sha256": "abdf011833740a6f0ca1654876f18d9a5911a9ad08806a38d015e60e3e516ab8",
+      "bytes": 3017768
+    },
+    "/usr/lib/libuuid.so.1": {
+      "sha256": "98f5106993cd1523eff94cfb46380fd802071113eb6b4e4895042d3bd3c33dc8",
+      "bytes": 67792
+    },
+    "/usr/lib/libxml2.so.16": {
+      "sha256": "4b35c8763ef09eb47d84eebe1eb1096388851ab75b1c5ad79f1ddf8e49a4aa47",
+      "bytes": 1379200
+    },
+    "/usr/lib/libz.so.1": {
+      "sha256": "44ec6811169255a0f2fec6295617ce3d22333470189403acbd55f0933c1cfdee",
+      "bytes": 133128
+    },
+    "/usr/lib/libzstd.so.1": {
+      "sha256": "14d907be630eb1670d14fc104a0982cca01feac5bc75f1846e54f6278c5ee2e2",
+      "bytes": 854104
+    }
+  },
+  "device_execution_verified": false,
+  "device_writes": false
+}

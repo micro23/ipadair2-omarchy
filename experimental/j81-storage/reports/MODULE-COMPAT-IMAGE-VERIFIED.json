@@ -1,0 +1,18 @@
+{
+  "kind": "orchard.ram-build",
+  "device": "j81",
+  "kernel_release": "7.3.0-rc1-orchard-j81-storage-ro-v2mod",
+  "hardware_tested": false,
+  "files": {
+    "linux.bin": "0dd9b7cc685689789fecd010d04864984bf3a3d22678082acf89ff0a9757bacd",
+    "pongo.bin": "1e5543fd8e6dbd84c334b87d71aa473f4d347c2ba8a5e863b6e10f18461c7575"
+  },
+  "base_hardware_tested_image_sha256": "1e98e353b6ed9dcd585eff52fba865a9aed17a9a20b1878bcfaf38ec9ec6eac1",
+  "changed_archive_entries": [
+    "lib/modules/7.3.0-rc1-orchard-j81-storage-ro-v2mod/kernel/drivers/block/asp.ko"
+  ],
+  "kernel_loader_dtb_bootargs_unchanged": true,
+  "module_sha256": "3e36f4b045a38ba4eeb46cce3a24a9d19955568b5831cd37e4124b5d6d6961f9",
+  "storage_driver_auto_loaded": false,
+  "storage_writes_enabled_by_boot": false
+}

@@ -1,0 +1,10 @@
+{
+  "logical_lba": 15624738,
+  "bytes": 4096,
+  "pattern_write_attempted": true,
+  "pattern_readback_passed": true,
+  "restore_attempted": true,
+  "restore_verified": true,
+  "module_loaded": true,
+  "passed": true
+}

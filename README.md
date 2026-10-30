@@ -14,7 +14,9 @@ A separate [ANS1 experiment](experimental/j81-storage/README.md) booted Linux
 and read this J81's internal 64 GB USERAREA with every namespace read-only.
 Full Omarchy A v0.1.1 userspace and native applications have run from NFS/RAM;
 **a persistent internal installation and untethered power-on boot are unfinished**.
-The experimental write candidate compiles but has no successful live write test.
+The matching-module experiment passed one approved 4096-byte write/read-back/
+restore, with the original restored and verified. Native installer tools also
+passed an ext4/RAM-file preflight. No internal filesystem installation has run.
 See the [full checkpoint](docs/status/2026-10-29.md).
 
 ## Original hardware handoff

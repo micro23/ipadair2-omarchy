@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-29",
+  "scope": "matching-module live storage and native-tool preflight",
+  "matching_module_host_fault_tests": 5,
+  "working_kernel_dtb_loader_bootargs_preserved": true,
+  "only_approved_internal_write_bytes": 4096,
+  "pattern_readback_passed": true,
+  "original_restored_and_verified": true,
+  "auxiliary_namespaces_read_only": 9,
+  "both_gpt_copies_valid_and_entries_identical": true,
+  "six_native_tools_execute": true,
+  "ram_ext4_create_and_five_e2fsck_passes": true,
+  "ram_fixture_and_mounts_cleaned": true,
+  "internal_disk_formatted": false,
+  "internal_root_booted": false,
+  "handoff_draft_shell_syntax_only": true,
+  "boot_independent_of_apfs_verified": false,
+  "original_rootfs_modified": false
+}

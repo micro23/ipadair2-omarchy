@@ -19,5 +19,6 @@
   "original_rootfs_modified": false,
   "new_kernel_live_write_test": false,
   "internal_install": false,
-  "security_audit": "See privacy-audit-2026-10-29.json; exact-owner-value matching performed locally before publication"
+  "security_audit": "See privacy-audit-2026-10-29.json; exact-owner-value matching performed locally before publication",
+  "scope": "Initial publication before the matching-module live write test; see native-install-checkpoint-2026-10-29.json for the later checkpoint"
 }
