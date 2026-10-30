@@ -66,8 +66,8 @@ size=$(cat /sys/class/block/"$block"/size)
 for n in 2 3 4 5 6 7 8 9 10; do
     [ "$(cat /sys/class/block/asp0n$n/ro)" = 1 ] || fail 'auxiliary namespace writable'
 done
-[ "$(blkid -s UUID -o value "$device")" = "$uuid" ] || fail 'filesystem UUID mismatch'
-awk -v dev="$device" '$1 == dev && $2 == "/newroot" && $3 == "ext4" && $4 ~ /(^|,)rw(,|$)/ {ok=1} END {exit !ok}' /proc/mounts || fail 'expected ext4 root is not mounted read-write'
+[ "$(/usr/bin/blkid -s UUID -o value "$device")" = "$uuid" ] || fail 'filesystem UUID mismatch'
+awk -v dev="$device" '$1 == dev && $2 == "/newroot" && $3 == "ext4" && $4 ~ /(^|,)(rw|ro)(,|$)/ {ok=1} END {exit !ok}' /proc/mounts || fail 'expected native ext4 root is not mounted'
 for dir in proc sys dev run; do
     [ -d "/newroot/$dir" ] && [ ! -L "/newroot/$dir" ] || fail 'root mountpoint missing or symlinked'
 done
@@ -78,8 +78,16 @@ grep -Fxq "KERNEL_RELEASE=$release" /newroot/etc/j81/internal-root.conf || fail 
 grep -Fxq "ROOT_DEVICE=$device" /newroot/etc/j81/internal-root.conf || fail 'installed root-device policy differs'
 actual=$(sha256sum "/newroot/lib/modules/$release/kernel/drivers/block/asp.ko")
 [ "${actual%% *}" = "$module_hash" ] || fail 'installed ASP module differs'
-# Confirm the native loader and complete systemd library closure before moves.
-chroot /newroot /usr/lib/systemd/systemd --version >/dev/null || fail 'native systemd cannot execute'
+# A released root normally has an empty /dev before the real mount moves.
+# Supply the current device tree only for this version check, then retire it.
+if awk '$2 == "/newroot/dev" {found=1} END {exit !found}' /proc/mounts; then
+    fail 'installer left a temporary /newroot/dev mount attached'
+fi
+mount -o bind /dev /newroot/dev || fail 'cannot prepare native systemd device access'
+native_status=0
+chroot /newroot /usr/lib/systemd/systemd --version >/dev/null || native_status=$?
+umount /newroot/dev || fail 'cannot retire temporary native device access'
+[ "$native_status" -eq 0 ] || fail 'native systemd cannot execute'
 echo 'J81: native ext4 root, UUID, kernel, ASP fence and systemd preflight passed'
 [ "$mode" = --handoff ] || exit 0
 cd /

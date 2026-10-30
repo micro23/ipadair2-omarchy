@@ -1,0 +1,18 @@
+[Unit]
+Description=Read-only J81 boot witness over USB
+Requires=j81-native-boot-proof.service
+After=j81-native-boot-proof.service network.target
+
+[Service]
+User=65534
+Group=65534
+ExecStart=/usr/local/libexec/j81-proof-http
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

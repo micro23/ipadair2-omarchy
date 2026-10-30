@@ -10,14 +10,19 @@ The fresh [Pongo quiet/normal comparison](docs/pongo/COMPARISON.md) is complete:
 both local source builds returned to iPadOS without a Pongo USB endpoint.
 The known-working pinned Hoolock prebuilt remains the qualified loader.
 
-A separate [ANS1 experiment](experimental/j81-storage/README.md) booted Linux
-and read this J81's internal 64 GB USERAREA with every namespace read-only.
-Full Omarchy A v0.1.1 userspace and native applications have run from NFS/RAM;
-**a persistent internal installation and untethered power-on boot are unfinished**.
-The matching-module experiment passed one approved 4096-byte write/read-back/
-restore, with the original restored and verified. Native installer tools also
-passed an ext4/RAM-file preflight. No internal filesystem installation has run.
-See the [full checkpoint](docs/status/2026-10-29.md).
+The full **Omarchy A v0.1.1 desktop has booted from the iPad's internal ext4
+partition**, with systemd as global PID 1. The owner confirmed the desktop;
+Wi-Fi autoconnect, DNS and HTTPS passed, and there were zero failed system units.
+The original rootfs archive and installed copy remain distinct. See the
+[native installation report](docs/status/2026-10-29-native-install.md).
+
+**A fresh boot also passed:** the persistent counter advanced to 2, the exact
+saved owner marker survived, and the native desktop and Wi-Fi returned. The
+bootstrap now defers Wi-Fi probing to installed systemd, after an earlier
+attempt stalled before recovery USB.
+Cold boot still needs a host through Pongo/m1n1; native touch remains unfinished.
+The [experimental sources](experimental/j81-storage/README.md) are specific to
+this measured J81 and are not a portable installer release.
 
 ## Original hardware handoff
 
@@ -34,9 +39,7 @@ requests as the desktop user. The owner confirmed working Mac keyboard/mouse
 forwarding in this combined session. See [qualification](QUALIFICATION.md)
 for the observed scope and remaining hardware work.
 
-This is a source contribution for hardware integration. It is **not yet an
-Orchard CLI device adapter, published launcher release or internal-storage
-installer**. There is no launch-manifest URL to imply that those pieces exist.
+This is a source contribution for hardware integration. It is **not yet a published, portable Orchard installer or launcher release**. There is no launch-manifest URL to imply that those pieces exist.
 
 ## Contents
 

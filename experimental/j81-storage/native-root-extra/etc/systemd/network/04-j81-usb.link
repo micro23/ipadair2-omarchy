@@ -1,0 +1,7 @@
+[Match]
+OriginalName=usb0
+
+[Link]
+NamePolicy=
+Name=usb0
+MACAddressPolicy=none

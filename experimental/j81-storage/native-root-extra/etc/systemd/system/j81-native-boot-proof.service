@@ -1,0 +1,12 @@
+[Unit]
+Description=Record verified native J81 boot and persistent counter
+Requires=j81-internal-root-guard.service
+After=j81-internal-root-guard.service local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/j81-native-boot-proof
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

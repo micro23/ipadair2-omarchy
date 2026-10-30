@@ -10,13 +10,10 @@
 - `resize.xml` and `gptcas.xml`: HoolockLinux/docs `tools/resize.xml` and
   `tools/gdisk.xml`, same source pin and MIT notice.
 
-These are staged experimental tools. Building/signing them is not permission
-to execute an APFS resize or a GPT update. The current approved hardware write
-scope is one 4096-byte test block, already restored and verified. No resize,
-partition modification or filesystem installation has been authorized or run.
-
-The intended native Linux root would use a second partition while retaining
-the Apple installation as support for the established cold-boot workflow.
-The 16 GiB APFS target is a proposal; measured allocation does not prove the
-Apple resizer will accept it. Its runtime must be checked and the concrete
-destructive operation approved before execution.
+These experimental sources were used on the owner's exact J81 after explicit
+native-install authorization. The Apple framework resize to 16 GiB passed;
+both GPT copies were updated/verified and normal iPadOS reboot passed. Linux
+p2 was then formatted and installed separately through the range-gated Linux
+module. Built signed iOS artifacts and private identity/raw metadata are not
+distributed. Compiling these sources does not authorize operations on any device.
+The hard-coded geometry describes the measured 64 GB owner unit only.

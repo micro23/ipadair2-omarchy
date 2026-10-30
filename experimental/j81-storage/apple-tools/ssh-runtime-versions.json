@@ -1,0 +1,7 @@
+{
+  "paramiko": "5.1.0",
+  "cryptography": "50.0.2",
+  "bcrypt": "5.0.0",
+  "pynacl": "1.6.2",
+  "cffi": "2.1.1"
+}

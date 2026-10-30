@@ -2,13 +2,20 @@
 
 ## Latest additions — 2026-10-29
 
-Later direct Work-mode tests qualified the refactored Orchard J81 baseline
-and a separate read-only ANS1 experiment. The paired source-built Pongo
-comparison failed with both quiet and normal framebuffer output; its cause
-is unresolved. See [current scope](docs/status/2026-10-29.md),
-[paired Pongo results](docs/pongo/COMPARISON.md), and
-[ANS1 evidence](experimental/j81-storage/README.md). The experimental writable
-path and internal-root PID 1 boot remain unqualified.
+Direct Work-mode tests qualified the refactored Orchard J81 baseline, ANS1
+read/write operation, and a full native Omarchy A v0.1.1 internal ext4 root with
+global systemd PID 1. A clean reboot/fresh kernel boot returned the desktop,
+incremented the persistent counter to 2 and preserved the exact owner marker.
+Wi-Fi/DNS/HTTPS passed with zero failed system units. See the
+[native installation and fixes](docs/status/2026-10-29-native-install.md).
+Cold boot remains host-tethered; native touch and the remaining hardware listed
+in the current report are unqualified. The historical RAM results below retain
+their original narrower scope.
+
+The paired source-built Pongo comparison failed with both quiet and normal
+framebuffer output; its cause is unresolved. See
+[paired results](docs/pongo/COMPARISON.md) and the
+[ANS1 source/evidence](experimental/j81-storage/README.md).
 
 ## Historical 2026-10-27 RAM/desktop session
 

@@ -1,0 +1,35 @@
+#!/usr/bin/python3
+"""Record a native-root boot only after the global systemd and root guards."""
+import json, os, pathlib, subprocess, tempfile
+
+def run(*args):
+    return subprocess.check_output(args,text=True).strip()
+
+if pathlib.Path('/proc/1/comm').read_text().strip()!='systemd':
+    raise SystemExit('Refusing proof: global PID 1 is not systemd')
+if not pathlib.Path('/run/j81/internal-root-verified').is_file():
+    raise SystemExit('Refusing proof: native-root guard did not pass')
+if run('findmnt','-n','-o','FSTYPE','/')!='ext4' or run('findmnt','-n','-o','SOURCE','/')!='/dev/asp0n1p2':
+    raise SystemExit('Refusing proof: root is not the native Linux partition')
+state=pathlib.Path('/var/lib/j81')
+state.mkdir(mode=0o700,parents=True,exist_ok=True)
+if state.is_symlink() or state.stat().st_uid!=0:
+    raise SystemExit('Refusing proof: invalid persistence directory')
+counter=state/'native-boot-state.json'
+if counter.is_symlink():raise SystemExit('Refusing symlinked counter')
+old=json.loads(counter.read_text()) if counter.exists() else {'count':0,'kernel_boot_id':None}
+if type(old.get('count')) is not int or not 0<=old['count']<1000000000:
+    raise SystemExit('Refusing malformed persistent counter')
+boot_id=pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+bootcount=old['count']+(old.get('kernel_boot_id')!=boot_id)
+fd,name=tempfile.mkstemp(prefix='.boot-count-',dir=state)
+with os.fdopen(fd,'w') as f:
+    json.dump({'count':bootcount,'kernel_boot_id':boot_id},f);f.write('\n');f.flush();os.fsync(f.fileno())
+os.replace(name,counter)
+fd=os.open(state,os.O_RDONLY|os.O_DIRECTORY);os.fsync(fd);os.close(fd)
+report={'global_pid1':'systemd','filesystem':'ext4','root_device':'/dev/asp0n1p2',
+        'root_identity_guard_passed':True,'persistent_boot_count':bootcount,
+        'kernel_boot_id':boot_id,'nfs_or_overlay_root':False}
+runtime=pathlib.Path('/run/j81');runtime.mkdir(mode=0o755,exist_ok=True)
+target=runtime/'native-boot-proof.json'
+target.write_text(json.dumps(report,indent=2)+'\n');target.chmod(0o644)

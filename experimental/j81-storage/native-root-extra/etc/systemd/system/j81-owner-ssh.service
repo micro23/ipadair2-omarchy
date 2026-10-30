@@ -1,0 +1,14 @@
+[Unit]
+Description=Owner-key tablet login on dedicated J81 USB address
+Requires=j81-internal-root-guard.service
+After=j81-internal-root-guard.service network.target
+
+[Service]
+ExecStartPre=/usr/local/libexec/j81-ssh-key-init
+# This exact recovery build compiles password/PAM authentication out.
+ExecStart=/usr/local/libexec/j81-dropbear -F -E -w -G tablet -j -k -l usb0 -p 10.71.0.1:2222 -r /etc/j81/dropbear_host_key
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

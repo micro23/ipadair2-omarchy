@@ -9,7 +9,9 @@ while :; do
             rm -f /run/j81/handoff.ready
             if /sbin/j81-native-handoff --check >/run/j81/handoff-check.log 2>&1; then
                 # Stop only children launched by this init, never broad killall.
-                kill "$serial_pid" 2>/dev/null || true
+                # BusyBox interactive ash ignores SIGTERM. This exact child is
+                # the disposable installer shell; retire it before waiting.
+                kill -KILL "$serial_pid" 2>/dev/null || true
                 wait "$serial_pid" 2>/dev/null || true
                 kill "$dhcp_pid" "$http_pid" 2>/dev/null || true
                 wait "$dhcp_pid" "$http_pid" 2>/dev/null || true

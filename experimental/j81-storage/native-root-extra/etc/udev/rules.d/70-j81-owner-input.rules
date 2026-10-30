@@ -1,0 +1,2 @@
+# The tablet desktop user belongs to input; permit its authenticated input bridge.
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"
