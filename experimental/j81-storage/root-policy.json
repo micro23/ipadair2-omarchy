@@ -1,5 +1,5 @@
 {
-  "overlay": "root-overlay",
+  "overlay": "/Users/micro/Documents/ChatGPT/iPad Air 2 linux/work/j81-internal-install/persistent-root-overlay",
   "remove_from_copied_root_only": [
     "etc/systemd/system/getty@tty1.service.d/20-j71b-platform.conf",
     "etc/systemd/system/multi-user.target.wants/j71b-charge.service",
@@ -7,7 +7,7 @@
   ],
   "preserve_existing_tty1_autologin_and_labwc_session": true,
   "installer_must_generate": [
-    "etc/j81/internal-root.conf with ROOT_UUID and exact qualified KERNEL_RELEASE",
+    "etc/j81/internal-root.conf with ROOT_DEVICE, ROOT_UUID and exact qualified KERNEL_RELEASE",
     "etc/fstab with same UUID",
     "matching lib/modules for installed kernel"
   ],
@@ -15,5 +15,7 @@
   "runtime_unit_parser_verified": false,
   "root_pid1_handoff_tested": false,
   "applied_to_original_rootfs": false,
-  "applied_to_ipad": false
+  "applied_to_ipad": false,
+  "intended_layout_proposal": "preserved-boot-layout-proposal.json",
+  "proposed_root_device": "/dev/asp0n1p2"
 }

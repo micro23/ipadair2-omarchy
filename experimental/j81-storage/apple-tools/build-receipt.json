@@ -1,0 +1,22 @@
+{
+  "source_origins": {
+    "gptcas": "brkosebay/omarchy-ipad5@41f1e15e83720445f46204ff4ffac7edc1d34b3d",
+    "resize": "HoolockLinux/docs@23ebe1fbc375599221553a7e1815e5de182a6b42"
+  },
+  "compiler_sdk": "Xcode iPhoneOS 27.1",
+  "deployment_target": "arm64-apple-ios15.0",
+  "signed_for_jailbroken_ios_only": true,
+  "codesign_verification_passed": true,
+  "host_fixture_tests_passed": 8,
+  "tests_use_sparse_host_files_only": true,
+  "ipad_tools_executed": false,
+  "apfs_resize_executed": false,
+  "partition_update_executed": false,
+  "sha256": {
+    "gptcas.c": "757327c57785ffb146e4429397b2b058931f92cc4f6d40cf6727f1187fe7310c",
+    "resize_apfs.c": "38019cfbb26052a6384c5c55e17a775666798b50f31c7d69b4fb19a6cc6742f2",
+    "gptcas-macos": "12b86910cce1314ccf30c834ccab8bcbb94de21b8087e80e26be7d6723ff72a0",
+    "gptcas-ios": "2896d9f2e616e4cf38616802a869f8cd22a1c8706a58cbd2178bb589d1632c7d",
+    "resize_apfs-ios": "eb406dfc9d0569c6194a48e203e5e9524632406b8a149e328b6c9c26a00e8e1b"
+  }
+}

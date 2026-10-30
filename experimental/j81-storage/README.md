@@ -142,7 +142,7 @@ system.
 Before handoff the installer must generate the actual new ext4 UUID, matching
 fstab and exact qualified kernel identity, preserve numeric ownership/modes/
 xattrs and install matching modules. The root guard requires internal ext4 on
-USERAREA partition 1, the exact UUID/kernel and a write window matching that
+the explicitly configured USERAREA partition, exact UUID/kernel and a write window matching that
 partition, with all auxiliary namespaces read-only. Its shell syntax was checked;
 Arch unit parsing and systemd PID 1/desktop startup have not been verified.
 
@@ -172,6 +172,38 @@ a tested boot image. It must not be treated as a qualified installer or executed
 as PID 1 until the layout, installed root and recovery plan are established.
 
 [Reference assessment](REFERENCE-OMARCHY-IPAD5.md) records useful A9 architecture
-and the unresolved J81 APFS-independent cold-boot question. The existing
-root-overlay guard still targets partition 1; an alternative layout must update
-and requalify that policy consistently before use.
+and the unresolved J81 APFS-independent cold-boot question. The root-overlay guard now also requires an explicit `ROOT_DEVICE` policy,
+pinned to the intended USERAREA partition. It must be applied consistently with
+the bootstrap and generated filesystem UUID before use.
+
+
+## Retained Apple boot-area proposal (not executed)
+
+A bounded, read-only APFS checkpoint/space-manager inspection validated the
+latest objects and measured 10,744,606,720 allocated bytes. The private raw
+metadata stays local. The [proposed layout](reports/preserved-boot-layout-proposal.json)
+retains a 16 GiB Apple area and allocates 46,816,821,248 bytes to Linux p2.
+Allocation headroom does not establish Apple's resize minimum.
+
+[Apple tools](apple-tools/NOTICE.md) preserve upstream GPL/MIT attribution.
+The GPL gptcas adaptation restricts the exact geometry/delta, validates both
+expected GPT copies, rejects changed APFS identity or Linux extent, checks
+container fit, and writes backup before primary. Eight sparse host-file tests
+passed, including interruption between complete copies and reversal. This does
+not establish safety after a torn individual sector write or a J81 iOS runtime
+pass. The adapted resize frontend has a probe-only mode; no live resize call
+has been made. Built iOS artifacts remain private and are not distributed here.
+
+The deferred-ASP installer bootstrap now assembles with the original qualified
+kernel/DTB/loader/bootargs and matching module. Native tools and a PID 1 handoff
+loop are added. It does not auto-load writable storage, install a root or start
+the handoff without an explicit installed-root request and successful guards.
+See the [offline receipt](reports/INSTALLER-BOOTSTRAP-BUILD-VERIFIED.json).
+No boot of this new image, native-root installation or actual global systemd
+PID 1 handoff is yet qualified. An Apple-side shell/framework check and a
+complete reviewed install controller are still required before destructive
+installation approval. No resize/GPT/format approval has been given.
+
+These host reconstruction helpers retain the original local workspace layout
+and require private owner-provided metadata/payload inputs. They are source
+references, not portable one-command installation instructions.

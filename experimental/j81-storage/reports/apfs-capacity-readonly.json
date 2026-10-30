@@ -1,0 +1,11 @@
+{
+  "read_only": true,
+  "internal_writes_performed": false,
+  "metadata_bytes_read": 1155072,
+  "latest_checkpoint_and_spaceman_checksums_valid": true,
+  "container_bytes": 63999954944,
+  "allocated_bytes": 10744606720,
+  "free_bytes": 53255348224,
+  "apple_resize_minimum_verified": false,
+  "note": "Allocation counters do not establish an APFS resize minimum; Apple resizer must validate any proposed shrink."
+}

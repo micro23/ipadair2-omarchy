@@ -57,3 +57,11 @@ No ownership of third-party hardware drivers or their research is claimed.
   quiet patch from the tested hardware baseline. No Pongo binary is distributed.
   The separately tested full userspace is OrchardLinux/omarchy-a v0.1.1; no
   rootfs image is redistributed here.
+
+
+The later experimental Apple partition tooling retains separate upstream terms:
+experimental/j81-storage/apple-tools/gptcas.c derives from brkosebay/omarchy-ipad5
+41f1e15e83720445f46204ff4ffac7edc1d34b3d (SPDX GPL-2.0; included GPL license).
+resize_apfs.c and entitlement sources derive from HoolockLinux/docs
+23ebe1fbc375599221553a7e1815e5de182a6b42 (copyright 2025 Hoolock Linux
+contributors, MIT; included original notice). See that directory's NOTICE.md.

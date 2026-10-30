@@ -1,0 +1,20 @@
+{
+  "device": "J81 / iPad5,3 / T7001",
+  "approved": false,
+  "executed": false,
+  "purpose": "Native Omarchy root with retained Apple cold-boot support",
+  "apple_resize_runtime_verified": false,
+  "apfs_resize_minimum_verified": false,
+  "apfs_first_lba": 6,
+  "apfs_last_lba": 4194309,
+  "apfs_target_bytes": 17179869184,
+  "apfs_current_allocated_bytes": 10744606720,
+  "apfs_headroom_after_current_allocations": 6435262464,
+  "linux_root_device": "/dev/asp0n1p2",
+  "linux_first_lba": 4194816,
+  "linux_last_lba": 15624703,
+  "linux_lba_count": 11429888,
+  "linux_bytes": 46816821248,
+  "all_auxiliary_namespaces_must_remain_read_only": true,
+  "cold_boot_still_host_tethered": true
+}

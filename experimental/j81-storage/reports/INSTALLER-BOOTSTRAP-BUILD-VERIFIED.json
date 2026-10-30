@@ -1,0 +1,16 @@
+{
+  "kind": "orchard.ram-build",
+  "device": "j81",
+  "kernel_release": "7.3.0-rc1-orchard-j81-storage-ro-v2mod",
+  "hardware_tested": false,
+  "kernel_loader_dtb_bootargs_unchanged": true,
+  "storage_driver_auto_loaded": false,
+  "storage_writes_enabled_by_boot": false,
+  "native_tools_included": true,
+  "only_changed_preexisting_archive_member": "init",
+  "native_root_handoff_device_tested": false,
+  "files": {
+    "linux.bin": "435d222c220242497abe4140b0a50c24251a061b920c477674454599d8ef3614",
+    "pongo.bin": "1e5543fd8e6dbd84c334b87d71aa473f4d347c2ba8a5e863b6e10f18461c7575"
+  }
+}

@@ -12,18 +12,20 @@ mode=$(stat -c %a "$config")
 release=$(sed -n 's/^KERNEL_RELEASE=\([a-zA-Z0-9._+-]*\)$/\1/p' "$config")
 [[ -n $release && $(uname -r) == "$release" ]] || fail 'installed kernel differs from qualified release'
 expected=$(sed -n 's/^ROOT_UUID=\([0-9a-fA-F-]*\)$/\1/p' "$config")
+device=$(sed -n 's/^ROOT_DEVICE=\(\/dev\/asp0n1p[12]\)$/\1/p' "$config")
+[[ $device == /dev/asp0n1p1 || $device == /dev/asp0n1p2 ]] || fail 'invalid root partition policy'
 [[ $expected =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || fail 'invalid root UUID'
 [[ $(findmnt -n -o FSTYPE /) == ext4 ]] || fail 'root is not ext4'
 source=$(findmnt -n -o SOURCE /)
-[[ $(readlink -f "$source") == /dev/asp0n1p1 ]] || fail 'root is not the USERAREA Linux partition'
-actual=$(blkid -s UUID -o value /dev/asp0n1p1)
+[[ $(readlink -f "$source") == "$device" ]] || fail 'root is not the configured USERAREA Linux partition'
+actual=$(blkid -s UUID -o value "$device")
 [[ ${actual,,} == ${expected,,} ]] || fail 'root filesystem UUID changed'
 [[ $(cat /sys/class/block/asp0n1/ro) == 0 ]] || fail 'USERAREA is read-only'
 [[ $(cat /sys/module/asp/parameters/allow_userarea_writes) == Y ]] || fail 'USERAREA write mode absent'
 first=$(cat /sys/module/asp/parameters/write_first_lba)
 count=$(cat /sys/module/asp/parameters/write_lba_count)
-start=$(cat /sys/class/block/asp0n1p1/start)
-size=$(cat /sys/class/block/asp0n1p1/size)
+start=$(cat /sys/class/block/"${device##*/}"/start)
+size=$(cat /sys/class/block/"${device##*/}"/size)
 [[ $first =~ ^[0-9]+$ && $count =~ ^[0-9]+$ && $start =~ ^[0-9]+$ && $size =~ ^[0-9]+$ ]] || fail 'invalid native-root geometry'
 (( start % 8 == 0 && size % 8 == 0 && first == start / 8 && count == size / 8 )) || fail 'write range differs from the root partition'
 for n in {2..10}; do
