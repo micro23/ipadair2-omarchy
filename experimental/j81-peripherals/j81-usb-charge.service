@@ -1,0 +1,16 @@
+[Unit]
+Description=J81 conservative configured-USB 500mA input policy
+Requires=j81-internal-root-guard.service
+After=j81-internal-root-guard.service
+ConditionPathExists=/etc/j81/internal-root.conf
+[Service]
+ExecStartPre=/usr/bin/modprobe i2c-dev
+ExecStart=/usr/bin/python3 /usr/local/libexec/j81-usb-charge.py --serve-usb-500ma
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=10
+NoNewPrivileges=yes
+ProtectHome=yes
+UMask=0077
+[Install]
+WantedBy=multi-user.target

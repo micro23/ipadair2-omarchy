@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-29",
+  "device": "J81 / iPad5,3 / T7001",
+  "native_root_unchanged": "/dev/asp0n1p2",
+  "owner_confirmed_mouse_and_keyboard": true,
+  "local_browser_viewer": "noVNC over pinned owner SSH exec to guest-localhost WayVNC",
+  "new_lan_desktop_listener": false,
+  "package_signature_checks_preserved": true,
+  "package_cache_permissions_fixed": true,
+  "packaged_archlinuxarm_keyring_initialized": true,
+  "usb_input_baseline_ma": 100,
+  "advertised_and_read_back_input_budget_ma": 500,
+  "active_battery_charge_current_setting_unchanged_ma": 3000,
+  "bounded_probe_restored_original_settings": true,
+  "positive_battery_current_observed_ua": [
+    66000,
+    110000
+  ],
+  "negative_battery_current_also_observed_under_load_ua": -550000,
+  "display_brightness_used": {
+    "value": 800,
+    "maximum": 2047
+  },
+  "fast_or_wall_charging_qualified": false,
+  "sustained_charging_under_all_loads_qualified": false,
+  "guard_tests_passed": 3,
+  "service_stop_restored_100ma": true,
+  "policy_enabled_on_installed_root": true,
+  "policy_persistence_after_another_boot_tested": false,
+  "spi_candidate_compiled_only": true,
+  "spi_candidate_loaded": false,
+  "physical_touch_working": false,
+  "new_device_reboot_performed": false,
+  "partition_factory_storage_or_asp_write_window_modified": false,
+  "owner_secrets_omitted": true
+}

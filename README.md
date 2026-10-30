@@ -24,6 +24,13 @@ Cold boot still needs a host through Pongo/m1n1; native touch remains unfinished
 The [experimental sources](experimental/j81-storage/README.md) are specific to
 this measured J81 and are not a portable installer release.
 
+Owner-confirmed browser mouse/keyboard control and a conservative USB-host
+charging path are now available. A 500 mA request enabled small positive battery
+current with the display dimmed, but active workloads can still discharge.
+Physical touch remains a board-specific port; the newer A8 SPI transport
+backport has passed a compile-only check. See the
+[peripheral report and source](experimental/j81-peripherals/README.md).
+
 ## Original hardware handoff
 
 Public hardware handoff for the **Wi-Fi iPad Air 2 — iPad5,3 / J81AP / A8X

@@ -1,0 +1,12 @@
+{
+  "upstream_revision": "ae1457edee7d2e52213e4d979aee02dbbeb90ce0",
+  "patch": "kernel/patches/drivers/spi/0003-spi-apple-add-t7000.patch",
+  "compiled_against_qualified_kernel": true,
+  "kernel_release": "7.3.0-rc1-orchard-j81-storage-ro-v2mod",
+  "kernel_source_and_output_read_only": true,
+  "undefined_symbols_in_baseline_exports": true,
+  "module_sha256": "cf4c76799e8073ad7f90b161ef2093169f8d3b088edf1a17ca787e1ab56dbb60",
+  "loaded_on_device": false,
+  "physical_touch_qualified": false,
+  "note": "Compile-only backport candidate; do not insmod a duplicate of the built-in driver."
+}

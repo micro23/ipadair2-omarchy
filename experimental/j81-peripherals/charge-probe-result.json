@@ -1,0 +1,143 @@
+{
+  "scope": "J81 USB-host 500mA bounded test",
+  "old_input_code": 2,
+  "old_usb_request_ma": 100,
+  "old_brightness": 1627,
+  "samples": [
+    {
+      "current_now": -681000,
+      "voltage_now": 4055000,
+      "temp": 321,
+      "capacity": 77,
+      "phase": "baseline-100mA",
+      "elapsed": 0.0,
+      "udc": "configured",
+      "input_code": 2,
+      "brightness": 1627
+    },
+    {
+      "current_now": -855000,
+      "voltage_now": 4054000,
+      "temp": 320,
+      "capacity": 77,
+      "phase": "500mA-original-brightness",
+      "elapsed": 0.77,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 1627
+    },
+    {
+      "current_now": -855000,
+      "voltage_now": 4054000,
+      "temp": 320,
+      "capacity": 77,
+      "phase": "500mA-original-brightness",
+      "elapsed": 5.77,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 1627
+    },
+    {
+      "current_now": -855000,
+      "voltage_now": 4054000,
+      "temp": 320,
+      "capacity": 77,
+      "phase": "500mA-original-brightness",
+      "elapsed": 10.78,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 1627
+    },
+    {
+      "current_now": -855000,
+      "voltage_now": 4054000,
+      "temp": 320,
+      "capacity": 77,
+      "phase": "500mA-original-brightness",
+      "elapsed": 15.79,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 1627
+    },
+    {
+      "current_now": -855000,
+      "voltage_now": 4054000,
+      "temp": 320,
+      "capacity": 77,
+      "phase": "500mA-original-brightness",
+      "elapsed": 20.79,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 1627
+    },
+    {
+      "current_now": -855000,
+      "voltage_now": 4054000,
+      "temp": 320,
+      "capacity": 77,
+      "phase": "500mA-dimmed",
+      "elapsed": 25.8,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 800
+    },
+    {
+      "current_now": 66000,
+      "voltage_now": 4080000,
+      "temp": 319,
+      "capacity": 77,
+      "phase": "500mA-dimmed",
+      "elapsed": 30.82,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 800
+    },
+    {
+      "current_now": 66000,
+      "voltage_now": 4080000,
+      "temp": 319,
+      "capacity": 77,
+      "phase": "500mA-dimmed",
+      "elapsed": 35.83,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 800
+    },
+    {
+      "current_now": 66000,
+      "voltage_now": 4080000,
+      "temp": 319,
+      "capacity": 77,
+      "phase": "500mA-dimmed",
+      "elapsed": 40.84,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 800
+    },
+    {
+      "current_now": 66000,
+      "voltage_now": 4080000,
+      "temp": 319,
+      "capacity": 77,
+      "phase": "500mA-dimmed",
+      "elapsed": 45.84,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 800
+    },
+    {
+      "current_now": 66000,
+      "voltage_now": 4080000,
+      "temp": 319,
+      "capacity": 77,
+      "phase": "500mA-dimmed",
+      "elapsed": 50.85,
+      "udc": "configured",
+      "input_code": 34,
+      "brightness": 800
+    }
+  ],
+  "restored": true,
+  "test_completed": true,
+  "active_battery_charge_code_unchanged": true
+}
